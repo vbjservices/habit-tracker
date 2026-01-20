@@ -1,4 +1,5 @@
 :root{
+  /* DARK (default) */
   --bg: #0b0f17;
   --panel: #121a27;
   --panel2: #0f1522;
@@ -13,15 +14,49 @@
   --sidebarW: 320px;
 }
 
+/* LIGHT THEME (pastel / character) */
+:root[data-theme="light"]{
+  --bg: #fff7fb;             /* warm pastel base */
+  --panel: rgba(255,255,255,0.78);
+  --panel2: rgba(255,255,255,0.70);
+  --text: #1b1f2a;
+  --muted: #5a6478;
+  --border: rgba(27,31,42,0.10);
+
+  /* softer but vivid */
+  --good: #22c55e;
+  --warn: #f59e0b;
+  --bad: #fb7185;
+  --accent: #a78bfa;         /* pastel purple accent */
+}
+
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
+
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  background: radial-gradient(1000px 600px at 20% 10%, rgba(96,165,250,0.15), transparent 60%),
-              radial-gradient(900px 500px at 90% 30%, rgba(74,222,128,0.12), transparent 55%),
-              var(--bg);
   color: var(--text);
+
+  /* Default background uses variables; theme switches via variables only */
+  background:
+    radial-gradient(1000px 600px at 20% 10%, rgba(96,165,250,0.15), transparent 60%),
+    radial-gradient(900px 500px at 90% 30%, rgba(74,222,128,0.12), transparent 55%),
+    var(--bg);
+}
+
+/* Light mode background: more pastel character (not plain white) */
+:root[data-theme="light"] body{
+  background:
+    radial-gradient(1100px 700px at 15% 10%, rgba(244,114,182,0.22), transparent 60%),
+    radial-gradient(900px 650px at 85% 15%, rgba(167,139,250,0.20), transparent 55%),
+    radial-gradient(900px 650px at 70% 90%, rgba(96,165,250,0.16), transparent 55%),
+    var(--bg);
+}
+
+/* Smooth theme switching */
+html, body, .sidebar, .topbar, .card, canvas, .folder, .sheet, .day, .btn, .icon-btn, .small-btn{
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 
 .app{
@@ -39,12 +74,16 @@ body{
   backdrop-filter: blur(2px);
   z-index: 40;
 }
+:root[data-theme="light"] .sidebar-overlay{
+  background: rgba(10,10,20,0.30);
+}
 .sidebar-overlay.open{ display:block; }
 
 .sidebar{
   border-right: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%),
-              var(--panel2);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), transparent 40%),
+    var(--panel2);
   display:flex;
   flex-direction:column;
   min-width:260px;
@@ -81,14 +120,15 @@ body{
 .icon-btn{
   width:38px; height:38px;
   border:1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.06);
   color: var(--text);
   border-radius:10px;
-  font-size:22px;
+  font-size:18px;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .icon-btn:hover{ border-color: rgba(255,255,255,0.18); }
+:root[data-theme="light"] .icon-btn:hover{ border-color: rgba(27,31,42,0.22); }
 
 .menu-btn{
   width:38px;
@@ -106,11 +146,16 @@ body{
 
 .folder{
   border:1px solid var(--border);
-  background: rgba(255,255,255,0.02);
+  background: rgba(255,255,255,0.05);
   border-radius:12px;
   margin-bottom:10px;
   overflow:hidden;
 }
+
+:root[data-theme="light"] .folder{
+  background: rgba(255,255,255,0.70);
+}
+
 .folder-head{
   display:flex;
   align-items:center;
@@ -119,7 +164,9 @@ body{
   gap:10px;
   cursor:pointer;
 }
-.folder-head:hover{ background: rgba(255,255,255,0.03); }
+.folder-head:hover{ background: rgba(255,255,255,0.06); }
+:root[data-theme="light"] .folder-head:hover{ background: rgba(244,114,182,0.08); }
+
 .folder-title{
   display:flex;
   align-items:center;
@@ -130,16 +177,18 @@ body{
 .folder-actions{
   display:flex; gap:6px;
 }
+
 .small-btn{
   width:30px; height:30px;
   border-radius:9px;
   border:1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.06);
   color: var(--text);
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .small-btn:hover{ border-color: rgba(255,255,255,0.18); }
+:root[data-theme="light"] .small-btn:hover{ border-color: rgba(27,31,42,0.22); }
 
 .sheets{
   padding: 6px 10px 10px 28px;
@@ -147,6 +196,7 @@ body{
   flex-direction:column;
   gap:6px;
 }
+
 .sheet{
   display:flex;
   align-items:center;
@@ -160,12 +210,21 @@ body{
 }
 .sheet:hover{
   border-color: var(--border);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.06);
 }
+:root[data-theme="light"] .sheet:hover{
+  background: rgba(167,139,250,0.10);
+}
+
 .sheet.active{
   border-color: rgba(96,165,250,0.35);
   background: rgba(96,165,250,0.10);
 }
+:root[data-theme="light"] .sheet.active{
+  border-color: rgba(167,139,250,0.45);
+  background: rgba(167,139,250,0.16);
+}
+
 .sheet-name{ font-weight:500; }
 .sheet-meta{ color: var(--muted); font-size:12px; }
 
@@ -204,6 +263,9 @@ body{
   position: relative;
   z-index: 10;
 }
+:root[data-theme="light"] .topbar{
+  background: rgba(255,255,255,0.55);
+}
 
 .topbar-left{
   display:flex;
@@ -230,7 +292,7 @@ body{
 
 .btn{
   border:1px solid var(--border);
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.06);
   color: var(--text);
   border-radius:10px;
   padding:10px 12px;
@@ -238,6 +300,7 @@ body{
   -webkit-tap-highlight-color: transparent;
 }
 .btn:hover{ border-color: rgba(255,255,255,0.18); }
+:root[data-theme="light"] .btn:hover{ border-color: rgba(27,31,42,0.22); }
 
 .view{
   padding:18px;
@@ -254,10 +317,14 @@ body{
 }
 .card{
   border:1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.05);
   border-radius:14px;
   padding:14px;
 }
+:root[data-theme="light"] .card{
+  background: rgba(255,255,255,0.75);
+}
+
 .card h2{
   margin:0 0 8px 0;
   font-size:16px;
@@ -275,7 +342,14 @@ body{
   gap:14px;
   flex-wrap:wrap;
 }
-canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(--border); }
+canvas{
+  background: rgba(0,0,0,0.15);
+  border-radius:12px;
+  border:1px solid var(--border);
+}
+:root[data-theme="light"] canvas{
+  background: rgba(255,255,255,0.65);
+}
 
 .legend{
   display:flex;
@@ -289,9 +363,13 @@ canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(-
   padding:7px 10px;
   border:1px solid var(--border);
   border-radius:999px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255,255,255,0.04);
   font-size:13px;
 }
+:root[data-theme="light"] .pill{
+  background: rgba(255,255,255,0.70);
+}
+
 .dot{
   width:10px; height:10px;
   border-radius:999px;
@@ -327,7 +405,7 @@ canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(-
 }
 .day{
   border:1px solid var(--border);
-  background: rgba(255,255,255,0.02);
+  background: rgba(255,255,255,0.04);
   border-radius:12px;
   padding:10px;
   min-height:72px;
@@ -337,16 +415,22 @@ canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(-
   gap:6px;
   -webkit-tap-highlight-color: transparent;
 }
-.day:hover{ border-color: rgba(255,255,255,0.18); }
-.day.off{
-  opacity:0.40;
+:root[data-theme="light"] .day{
+  background: rgba(255,255,255,0.72);
 }
+
+.day:hover{ border-color: rgba(255,255,255,0.18); }
+:root[data-theme="light"] .day:hover{ border-color: rgba(27,31,42,0.22); }
+
+.day.off{ opacity:0.40; }
+
 .day .top{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
 }
+
 .badge{
   width:20px; height:20px;
   border-radius:7px;
@@ -358,11 +442,16 @@ canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(-
   color: var(--muted);
   background: rgba(0,0,0,0.12);
 }
+:root[data-theme="light"] .badge{
+  background: rgba(255,255,255,0.65);
+}
+
 .badge.done{
   border-color: rgba(74,222,128,0.35);
   background: rgba(74,222,128,0.12);
   color: var(--good);
 }
+
 .today{
   outline: 2px solid rgba(96,165,250,0.35);
 }
