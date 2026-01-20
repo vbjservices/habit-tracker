@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Habit Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-title">Habits</div>
+          <div class="brand-subtitle">GitHub Pages MVP</div>
+        </div>
+
+        <button id="addFolderBtn" class="icon-btn" title="Nieuw mapje">+</button>
+      </div>
+
+      <nav id="sidebarNav" class="nav"></nav>
+
+      <div class="sidebar-footer">
+        <button id="goDashboardBtn" class="link-btn">🏠 Dashboard</button>
+        <button id="exportBtn" class="link-btn">⬇️ Export JSON</button>
+        <button id="importBtn" class="link-btn">⬆️ Import JSON</button>
+        <input id="importFile" type="file" accept="application/json" hidden />
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumbs" id="breadcrumbs"></div>
+        <div class="topbar-actions">
+          <button id="todayBtn" class="btn">Vandaag</button>
+        </div>
+      </header>
+
+      <section id="view" class="view"></section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
