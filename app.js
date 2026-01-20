@@ -1,20 +1,20 @@
 /* =========================
-   Simple Habits MVP (Mobile-ready)
-   - Folders -> Sheets -> Calendar checks per day
-   - Dashboard pie shows today's completion across ALL sheets
-   - Storage: localStorage
-   - Mobile: off-canvas sidebar drawer + overlay
+   Simple Habits MVP (robust mobile navigation)
+   - Brand/title click => Dashboard
+   - No bottom dashboard button in sidebar footer
+   - Sheet view: top-right button becomes Home (🏠) to go dashboard
+   - Mobile sidebar drawer: reliable open/close with overlay, ESC, resize
 ========================= */
 
 const STORAGE_KEY = "habitAppData_v1";
 
-const $ = (sel) => document.querySelector(sel);
-
 const state = {
   data: loadData(),
   route: { view: "dashboard", folderId: null, sheetId: null },
-  monthCursor: new Date(), // used for calendar view
+  monthCursor: new Date(),
 };
+
+function $(sel) { return document.querySelector(sel); }
 
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -32,15 +32,9 @@ function fmtMonthTitle(d) {
   return `${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function startOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-function endOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
-}
-function daysInMonth(d) {
-  return endOfMonth(d).getDate();
-}
+function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
+function daysInMonth(d) { return endOfMonth(d).getDate(); }
 
 // Monday-first weekday index (Mon=0..Sun=6)
 function weekdayIndexMonFirst(date) {
@@ -55,11 +49,14 @@ function loadData() {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return { folders: [] };
     if (!Array.isArray(parsed.folders)) parsed.folders = [];
-    // normalize legacy
+
+    // normalize
     for (const f of parsed.folders) {
+      if (!f.id) f.id = uid();
       if (!Array.isArray(f.sheets)) f.sheets = [];
       if (typeof f.open !== "boolean") f.open = true;
       for (const s of f.sheets) {
+        if (!s.id) s.id = uid();
         if (!s.checks || typeof s.checks !== "object") s.checks = {};
       }
     }
@@ -76,6 +73,7 @@ function saveData() {
 function findFolder(folderId) {
   return state.data.folders.find(f => f.id === folderId) || null;
 }
+
 function findSheet(folderId, sheetId) {
   const folder = findFolder(folderId);
   if (!folder) return null;
@@ -91,16 +89,22 @@ function allSheets() {
 }
 
 /* =========================
-   Mobile sidebar drawer
+   Mobile sidebar drawer (robust)
 ========================= */
 
 function isMobile() {
   return window.matchMedia("(max-width: 980px)").matches;
 }
 
+function sidebarEls() {
+  return {
+    sidebar: $("#sidebar"),
+    overlay: $("#sidebarOverlay"),
+  };
+}
+
 function openSidebar() {
-  const sidebar = $("#sidebar");
-  const overlay = $("#sidebarOverlay");
+  const { sidebar, overlay } = sidebarEls();
   if (!sidebar || !overlay) return;
 
   sidebar.classList.add("open");
@@ -110,8 +114,7 @@ function openSidebar() {
 }
 
 function closeSidebar() {
-  const sidebar = $("#sidebar");
-  const overlay = $("#sidebarOverlay");
+  const { sidebar, overlay } = sidebarEls();
   if (!sidebar || !overlay) return;
 
   sidebar.classList.remove("open");
@@ -121,7 +124,7 @@ function closeSidebar() {
 }
 
 function toggleSidebar() {
-  const sidebar = $("#sidebar");
+  const { sidebar } = sidebarEls();
   if (!sidebar) return;
   if (sidebar.classList.contains("open")) closeSidebar();
   else openSidebar();
@@ -156,7 +159,6 @@ function renameFolder(folderId, name) {
 
 function deleteFolder(folderId) {
   state.data.folders = state.data.folders.filter(f => f.id !== folderId);
-  // if we were inside it, go dashboard
   if (state.route.folderId === folderId) {
     state.route = { view: "dashboard", folderId: null, sheetId: null };
   }
@@ -178,7 +180,7 @@ function addSheet(folderId, name) {
   folder.sheets.push({
     id: uid(),
     name,
-    checks: {}, // { "YYYY-MM-DD": true }
+    checks: {},
   });
   saveData();
   render();
@@ -210,7 +212,7 @@ function toggleCheck(folderId, sheetId, isoDate) {
   sheet.checks[isoDate] = !sheet.checks[isoDate];
   if (!sheet.checks[isoDate]) delete sheet.checks[isoDate];
   saveData();
-  render(); // updates dashboard too
+  render();
 }
 
 /* =========================
@@ -225,7 +227,7 @@ function goDashboard() {
 
 function openSheet(folderId, sheetId) {
   state.route = { view: "sheet", folderId, sheetId };
-  state.monthCursor = new Date(); // reset to current month when opening
+  state.monthCursor = new Date();
   render();
   closeSidebarIfMobile();
 }
@@ -247,9 +249,25 @@ function setBreadcrumbs() {
   `;
 }
 
+function setTopRightButton() {
+  const btn = $("#topRightBtn");
+  if (!btn) return;
+
+  if (state.route.view === "sheet") {
+    btn.textContent = "🏠 Home";
+    btn.title = "Terug naar dashboard";
+    btn.setAttribute("aria-label", "Terug naar dashboard");
+  } else {
+    btn.textContent = "Vandaag";
+    btn.title = "Ga naar vandaag";
+    btn.setAttribute("aria-label", "Ga naar vandaag");
+  }
+}
+
 function render() {
   renderSidebar();
   setBreadcrumbs();
+  setTopRightButton();
 
   const view = $("#view");
   if (!view) return;
@@ -295,17 +313,15 @@ function renderSidebar() {
         <span>📁 ${escapeHtml(folder.name)}</span>
       </div>
       <div class="folder-actions">
-        <button class="small-btn" title="Nieuwe sheet" data-action="add-sheet" data-folder="${folder.id}">+</button>
-        <button class="small-btn" title="Mapje hernoemen" data-action="rename-folder" data-folder="${folder.id}">✎</button>
-        <button class="small-btn" title="Mapje verwijderen" data-action="delete-folder" data-folder="${folder.id}">🗑</button>
+        <button class="small-btn" title="Nieuwe sheet" aria-label="Nieuwe sheet" data-action="add-sheet" data-folder="${folder.id}">+</button>
+        <button class="small-btn" title="Mapje hernoemen" aria-label="Mapje hernoemen" data-action="rename-folder" data-folder="${folder.id}">✎</button>
+        <button class="small-btn" title="Mapje verwijderen" aria-label="Mapje verwijderen" data-action="delete-folder" data-folder="${folder.id}">🗑</button>
       </div>
     `;
 
     head.addEventListener("click", (e) => {
       const btn = e.target.closest("button");
-      if (!btn) {
-        toggleFolderOpen(folder.id);
-      }
+      if (!btn) toggleFolderOpen(folder.id);
     });
 
     folderEl.appendChild(head);
@@ -351,7 +367,7 @@ function renderSidebar() {
     nav.appendChild(folderEl);
   }
 
-  // wire folder action buttons (event delegation)
+  // wire folder action buttons
   nav.querySelectorAll("button[data-action]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -431,7 +447,7 @@ function renderDashboardHTML() {
 
         <div style="height:12px"></div>
         <div class="muted">
-          Tip: maak een mapje (folder) en voeg sheets toe. Elke sheet telt mee als 1 “gewoonte” voor het dagpercentage.
+          Tip: elke sheet telt als 1 gewoonte voor het dagpercentage.
         </div>
       </div>
 
@@ -522,10 +538,10 @@ function renderSheetHTML() {
 
   const weekdays = ["Ma","Di","Wo","Do","Vr","Za","Zo"].map(w => `<div class="weekday">${w}</div>`).join("");
 
-  // build 6-week grid (42 cells) so layout stays stable
+  // stable 6-week grid
   const cells = [];
   const firstCellDate = new Date(monthStart);
-  firstCellDate.setDate(1 - offset); // may be previous month
+  firstCellDate.setDate(1 - offset);
 
   for (let i=0; i<42; i++) {
     const cellDate = new Date(firstCellDate);
@@ -537,8 +553,7 @@ function renderSheetHTML() {
     const isToday = iso === todayISO();
 
     cells.push(`
-      <div class="day ${inMonth ? "" : "off"} ${isToday ? "today" : ""}"
-           data-iso="${iso}">
+      <div class="day ${inMonth ? "" : "off"} ${isToday ? "today" : ""}" data-iso="${iso}">
         <div class="top">
           <div>${cellDate.getDate()}</div>
           <div class="badge ${done ? "done" : ""}">${done ? "✓" : ""}</div>
@@ -549,7 +564,6 @@ function renderSheetHTML() {
   }
 
   const monthTitle = fmtMonthTitle(d);
-
   const monthStats = computeMonthStats(sheet, d);
   const todayDone = !!sheet.checks[todayISO()];
 
@@ -564,8 +578,8 @@ function renderSheetHTML() {
           </div>
         </div>
         <div class="cal-nav">
-          <button class="btn" id="prevMonthBtn">←</button>
-          <button class="btn" id="nextMonthBtn">→</button>
+          <button class="btn" id="prevMonthBtn" type="button" aria-label="Vorige maand">←</button>
+          <button class="btn" id="nextMonthBtn" type="button" aria-label="Volgende maand">→</button>
         </div>
       </div>
 
@@ -623,7 +637,6 @@ function importJSONFile(file) {
         alert("Ongeldig JSON-bestand.");
         return;
       }
-      // minimal normalize
       for (const f of parsed.folders) {
         if (!f.id) f.id = uid();
         if (!Array.isArray(f.sheets)) f.sheets = [];
@@ -645,67 +658,106 @@ function importJSONFile(file) {
 }
 
 /* =========================
-   Events
+   Events (robust wiring)
 ========================= */
 
-function wireGlobalEvents() {
-  // Mobile menu toggle
-  $("#menuBtn")?.addEventListener("click", toggleSidebar);
+function wireEvents() {
+  const menuBtn = $("#menuBtn");
+  const overlay = $("#sidebarOverlay");
+  const brandBtn = $("#brandBtn");
+  const addFolderBtn = $("#addFolderBtn");
+  const exportBtn = $("#exportBtn");
+  const importBtn = $("#importBtn");
+  const importFile = $("#importFile");
+  const topRightBtn = $("#topRightBtn");
+  const view = $("#view");
 
-  // Overlay closes drawer
-  $("#sidebarOverlay")?.addEventListener("click", closeSidebar);
+  // If these are missing, your HTML is broken. Fix that first.
+  if (!menuBtn || !overlay || !brandBtn || !addFolderBtn || !topRightBtn || !view) {
+    console.error("Missing required DOM elements. Check index.html ids.");
+  }
+
+  // Sidebar open/close
+  menuBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    toggleSidebar();
+  });
+
+  overlay?.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeSidebar();
+  });
 
   // ESC closes drawer
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeSidebar();
   });
 
-  // When resizing from mobile->desktop, ensure body scroll restored
+  // Resizing: if leaving mobile, ensure drawer + overlay are closed and scroll restored
   window.addEventListener("resize", () => {
     if (!isMobile()) {
       closeSidebar();
-      // On desktop we definitely want scroll enabled
       document.body.style.overflow = "";
     }
   });
 
-  $("#addFolderBtn")?.addEventListener("click", () => {
+  // Brand click => dashboard
+  brandBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    goDashboard();
+  });
+
+  // Add folder
+  addFolderBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
     const name = prompt("Naam van mapje (bv. fitness):");
     if (name && name.trim()) addFolder(name.trim());
   });
 
-  $("#goDashboardBtn")?.addEventListener("click", goDashboard);
+  // Top-right: dashboard => today (rerender), sheet => home (dashboard)
+  topRightBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
 
-  $("#todayBtn")?.addEventListener("click", () => {
     if (state.route.view === "sheet") {
-      state.monthCursor = new Date();
-      render();
-    } else {
-      render();
+      goDashboard();
+      return;
     }
+
+    // dashboard: "Vandaag" just re-render (and could later scroll or refresh)
+    render();
   });
 
-  $("#exportBtn")?.addEventListener("click", exportJSON);
+  // Export / Import
+  exportBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    exportJSON();
+  });
 
-  $("#importBtn")?.addEventListener("click", () => $("#importFile")?.click());
-  $("#importFile")?.addEventListener("change", (e) => {
+  importBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    importFile?.click();
+  });
+
+  importFile?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (file) importJSONFile(file);
     e.target.value = "";
   });
 
-  // calendar interactions (event delegation)
-  $("#view")?.addEventListener("click", (e) => {
+  // Calendar interactions (event delegation)
+  view?.addEventListener("click", (e) => {
     if (state.route.view !== "sheet") return;
 
     const prevBtn = e.target.closest("#prevMonthBtn");
     const nextBtn = e.target.closest("#nextMonthBtn");
+
     if (prevBtn) {
       const d = state.monthCursor;
       state.monthCursor = new Date(d.getFullYear(), d.getMonth() - 1, 1);
       render();
       return;
     }
+
     if (nextBtn) {
       const d = state.monthCursor;
       state.monthCursor = new Date(d.getFullYear(), d.getMonth() + 1, 1);
@@ -718,16 +770,6 @@ function wireGlobalEvents() {
 
     const iso = day.dataset.iso;
     toggleCheck(state.route.folderId, state.route.sheetId, iso);
-  });
-
-  // Close sidebar when clicking any navigation item in sidebar (mobile)
-  $("#sidebarNav")?.addEventListener("click", (e) => {
-    // if user taps a sheet row or folder area, we let existing handlers run
-    // but still close if a sheet was clicked (openSheet already closes)
-    // this is a fallback: if they click plain dashboard/export/import etc. already handled.
-    if (isMobile()) {
-      // no-op here; openSheet/goDashboard already close.
-    }
   });
 }
 
@@ -748,5 +790,7 @@ function escapeHtml(str) {
    Init
 ========================= */
 
-wireGlobalEvents();
-render();
+document.addEventListener("DOMContentLoaded", () => {
+  wireEvents();
+  render();
+});

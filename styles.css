@@ -58,6 +58,23 @@ body{
   gap:12px;
   border-bottom:1px solid var(--border);
 }
+
+/* Brand button */
+.brand-btn{
+  border:none;
+  background:transparent;
+  padding:0;
+  margin:0;
+  color:inherit;
+  cursor:pointer;
+  text-align:left;
+  border-radius:10px;
+}
+.brand-btn:focus-visible{
+  outline: 2px solid rgba(96,165,250,0.35);
+  outline-offset: 4px;
+}
+
 .brand-title{ font-weight:700; font-size:18px; }
 .brand-subtitle{ color:var(--muted); font-size:12px; margin-top:2px; }
 
@@ -69,10 +86,10 @@ body{
   border-radius:10px;
   font-size:22px;
   cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .icon-btn:hover{ border-color: rgba(255,255,255,0.18); }
 
-/* Mobile menu button: slightly smaller to fit topbar */
 .menu-btn{
   width:38px;
   height:38px;
@@ -84,6 +101,7 @@ body{
   padding:12px;
   overflow:auto;
   flex:1;
+  -webkit-overflow-scrolling: touch;
 }
 
 .folder{
@@ -119,6 +137,7 @@ body{
   background: rgba(255,255,255,0.03);
   color: var(--text);
   cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .small-btn:hover{ border-color: rgba(255,255,255,0.18); }
 
@@ -137,6 +156,7 @@ body{
   border:1px solid transparent;
   cursor:pointer;
   color: var(--text);
+  -webkit-tap-highlight-color: transparent;
 }
 .sheet:hover{
   border-color: var(--border);
@@ -181,6 +201,8 @@ body{
   gap:12px;
   background: rgba(0,0,0,0.15);
   backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 10; /* keep topbar above main content */
 }
 
 .topbar-left{
@@ -213,12 +235,14 @@ body{
   border-radius:10px;
   padding:10px 12px;
   cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .btn:hover{ border-color: rgba(255,255,255,0.18); }
 
 .view{
   padding:18px;
   overflow:auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Dashboard */
@@ -311,6 +335,7 @@ canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(-
   display:flex;
   flex-direction:column;
   gap:6px;
+  -webkit-tap-highlight-color: transparent;
 }
 .day:hover{ border-color: rgba(255,255,255,0.18); }
 .day.off{
@@ -361,26 +386,23 @@ canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(-
     transition: transform 180ms ease;
     box-shadow: 20px 0 60px rgba(0,0,0,0.55);
     border-right: 1px solid var(--border);
+    will-change: transform;
   }
   .sidebar.open{
     transform: translateX(0);
   }
 
-  /* main spans full width */
   .main{
     width: 100%;
   }
 
-  /* dashboard layout stacks */
   .card-grid{
     grid-template-columns: 1fr;
   }
 
-  /* smaller padding */
   .view{ padding: 14px; }
   .topbar{ padding: 12px 12px; }
 
-  /* calendar day slightly smaller */
   .day{ min-height: 64px; padding: 9px; }
 }
 
