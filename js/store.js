@@ -12,7 +12,7 @@ export function loadData() {
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.folders)) {
       return { folders: [] };
     }
-    // Basic normalization
+
     for (const f of parsed.folders) {
       if (!Array.isArray(f.sheets)) f.sheets = [];
       if (typeof f.open !== "boolean") f.open = true;
@@ -79,7 +79,7 @@ export function addSheet(data, folderId, name) {
   f.sheets.push({
     id: uid("sheet"),
     name,
-    checks: {},
+    checks: {}, // iso -> color string (or legacy boolean)
   });
 }
 
@@ -94,11 +94,24 @@ export function deleteSheet(data, folderId, sheetId) {
   f.sheets = (f.sheets || []).filter(s => s.id !== sheetId);
 }
 
-export function toggleCheck(data, folderId, sheetId, isoKey) {
+// NEW: set/clear a color for a day
+export function setCheckColor(data, folderId, sheetId, isoKey, colorOrNull) {
   const s = findSheet(data, folderId, sheetId);
   if (!s) return;
-  if (s.checks[isoKey]) delete s.checks[isoKey];
-  else s.checks[isoKey] = true;
+
+  if (!colorOrNull) {
+    delete s.checks[isoKey];
+    return;
+  }
+  s.checks[isoKey] = colorOrNull; // "red"|"yellow"|...
+}
+
+// Backwards compatibility helper for reads
+export function getCheckValue(sheet, isoKey) {
+  const v = sheet?.checks?.[isoKey];
+  if (v === true) return "blue"; // legacy boolean -> default color
+  if (typeof v === "string") return v;
+  return null;
 }
 
 export function exportJSON(data) {
@@ -122,7 +135,7 @@ export function importJSONFile(file, cb) {
         throw new Error("Invalid JSON structure");
       }
       cb(parsed);
-    } catch (e) {
+    } catch {
       alert("Import failed: invalid JSON");
     }
   };

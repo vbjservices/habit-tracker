@@ -8,7 +8,10 @@ import {
   addSheet,
   renameSheet,
   deleteSheet,
-  toggleCheck,
+  setCheckColor,
+  findFolder,
+  findSheet,
+  getCheckValue,
   exportJSON,
   importJSONFile,
 } from "./store.js";
@@ -19,18 +22,26 @@ import {
   renderDashboard,
   renderFolderOverview,
   wireFolderOverview,
+  captureFolderScroll,
+  restoreFolderScroll,
   setBreadcrumbs,
   setTopRightButton
 } from "./ui.js";
+
+import { openColorPicker } from "./modal.js";
 
 const $ = (sel) => document.querySelector(sel);
 
 const app = {
   data: loadData(),
-  route: { view: "dashboard", folderId: null, sheetId: null },
+  route: { view: "dashboard", folderId: null },
   monthCursor: new Date(),
   lastIso: null,
   dashboardRange: "1D",
+
+  // Controls auto-jump behavior
+  folderViewJustOpened: false,
+  folderViewMonthJustChanged: false,
 };
 
 function persist() {
@@ -76,20 +87,28 @@ function closeSidebarIfMobile() {
 
 /* ===== Routing ===== */
 function goDashboard() {
-  app.route = { view: "dashboard", folderId: null, sheetId: null };
+  app.route = { view: "dashboard", folderId: null };
+  app.folderViewJustOpened = false;
+  app.folderViewMonthJustChanged = false;
   render();
   closeSidebarIfMobile();
 }
 
 function openFolderRoute(folderId) {
-  app.route = { view: "folder", folderId, sheetId: null };
+  app.route = { view: "folder", folderId };
   app.monthCursor = new Date();
+  app.folderViewJustOpened = true;          // auto-jump ONCE
+  app.folderViewMonthJustChanged = false;
   render();
   closeSidebarIfMobile();
 }
 
 /* ===== Render pipeline ===== */
-function render() {
+function render({ preserveFolderScroll = false } = {}) {
+  const folderScroll = (preserveFolderScroll && app.route.view === "folder")
+    ? captureFolderScroll()
+    : null;
+
   renderSidebar(app.route, app.data);
   setBreadcrumbs(app.route, app.data);
   setTopRightButton(app.route);
@@ -101,8 +120,18 @@ function render() {
 
   if (app.route.view === "folder") {
     renderFolderOverview(app.route, app.data, app.monthCursor);
-    // Critical: innerHTML scripts don't run, so we wire behavior here
-    wireFolderOverview();
+
+    const shouldAutoJump = app.folderViewJustOpened || app.folderViewMonthJustChanged;
+
+    wireFolderOverview({ autoScrollToToday: shouldAutoJump });
+
+    // After first render with auto-jump: disable it
+    app.folderViewJustOpened = false;
+    app.folderViewMonthJustChanged = false;
+
+    // If we clicked around and re-rendered: restore scroll (NO jumping)
+    if (folderScroll) restoreFolderScroll(folderScroll);
+
     return;
   }
 }
@@ -177,7 +206,6 @@ function wireEvents() {
 
   // Sidebar delegation
   $("#sidebarNav")?.addEventListener("click", (e) => {
-    // Toggle folder open/close (chevron)
     const toggleBtn = e.target.closest("[data-toggle-folder='1']");
     if (toggleBtn) {
       e.preventDefault();
@@ -189,7 +217,6 @@ function wireEvents() {
       return;
     }
 
-    // Rename habit
     const renameHabit = e.target.closest("[data-rename-sheet='1']");
     if (renameHabit) {
       e.preventDefault();
@@ -206,7 +233,6 @@ function wireEvents() {
       return;
     }
 
-    // Buttons
     const btn = e.target.closest("button[data-action]");
     if (btn) {
       e.preventDefault();
@@ -226,13 +252,13 @@ function wireEvents() {
 
       if (action === "delete-sheet") {
         const sheetId = btn.dataset.sheet;
-        const folder = app.data.folders.find(f => f.id === folderId);
+        const folder = findFolder(app.data, folderId);
         const sheet = folder?.sheets?.find(s => s.id === sheetId);
         const sheetName = sheet?.name || "this habit";
 
-        // Safety check: explicit confirm
-        const ok = confirm(`Delete "${sheetName}"?\n\nThis cannot be undone.`);
-        if (!ok) return;
+        // Safety check: typed confirm is more bulletproof than OK/Cancel
+        const typed = prompt(`Type DELETE to remove "${sheetName}". This cannot be undone.`);
+        if (typed !== "DELETE") return;
 
         deleteSheet(app.data, folderId, sheetId);
         persist();
@@ -240,7 +266,7 @@ function wireEvents() {
       }
 
       if (action === "rename-folder") {
-        const folder = app.data.folders.find(f => f.id === folderId);
+        const folder = findFolder(app.data, folderId);
         const name = prompt("New folder name:", folder?.name || "");
         if (name && name.trim()) {
           renameFolder(app.data, folderId, name.trim());
@@ -250,21 +276,20 @@ function wireEvents() {
       }
 
       if (action === "delete-folder") {
-        const folder = app.data.folders.find(f => f.id === folderId);
-        const ok = confirm(`Delete folder "${folder?.name || ""}" (incl. habits)?\n\nThis cannot be undone.`);
-        if (ok) {
-          const wasInside = app.route.folderId === folderId;
-          deleteFolder(app.data, folderId);
-          persist();
-          if (wasInside) goDashboard();
-          else render();
-        }
+        const folder = findFolder(app.data, folderId);
+        const typed = prompt(`Type DELETE to remove folder "${folder?.name || ""}" (incl. habits).`);
+        if (typed !== "DELETE") return;
+
+        const wasInside = app.route.folderId === folderId;
+        deleteFolder(app.data, folderId);
+        persist();
+        if (wasInside) goDashboard();
+        else render();
       }
 
       return;
     }
 
-    // Open folder overview
     const folderHead = e.target.closest("[data-folder-head='1']");
     if (folderHead) {
       const folderId = folderHead.dataset.folder;
@@ -274,8 +299,7 @@ function wireEvents() {
   });
 
   // Main view delegation
-  $("#view")?.addEventListener("click", (e) => {
-    // Dashboard range selector
+  $("#view")?.addEventListener("click", async (e) => {
     const rangeBtn = e.target.closest("[data-range]");
     if (rangeBtn && app.route.view === "dashboard") {
       app.dashboardRange = rangeBtn.dataset.range;
@@ -283,29 +307,39 @@ function wireEvents() {
       return;
     }
 
-    // Month nav (folder view)
     const prev = e.target.closest("#prevMonthBtn");
     const next = e.target.closest("#nextMonthBtn");
-    if (prev && app.route.view === "folder") {
-      app.monthCursor = addMonths(app.monthCursor, -1);
-      render();
-      return;
-    }
-    if (next && app.route.view === "folder") {
-      app.monthCursor = addMonths(app.monthCursor, 1);
+    if ((prev || next) && app.route.view === "folder") {
+      app.monthCursor = addMonths(app.monthCursor, prev ? -1 : 1);
+      app.folderViewMonthJustChanged = true;  // auto-jump on month change
       render();
       return;
     }
 
-    // Folder overview cell toggle
+    // Folder cell click -> open color picker overlay
     const fvCell = e.target.closest(".fv-cell");
     if (fvCell && app.route.view === "folder") {
       const folderId = fvCell.dataset.folder;
       const sheetId = fvCell.dataset.sheet;
       const isoKey = fvCell.dataset.iso;
-      toggleCheck(app.data, folderId, sheetId, isoKey);
+
+      const folder = findFolder(app.data, folderId);
+      const sheet = findSheet(app.data, folderId, sheetId);
+      const current = sheet ? getCheckValue(sheet, isoKey) : null;
+
+      const picked = await openColorPicker({ current });
+
+      if (!picked) return; // closed
+      if (picked === "__clear__") {
+        setCheckColor(app.data, folderId, sheetId, isoKey, null);
+      } else {
+        setCheckColor(app.data, folderId, sheetId, isoKey, picked);
+      }
+
       persist();
-      render();
+
+      // Re-render but preserve scroll; DO NOT auto-jump.
+      render({ preserveFolderScroll: true });
       return;
     }
   });
@@ -319,7 +353,7 @@ function startAutoDayRollover() {
     const iso = todayISOAmsterdam();
     if (iso !== app.lastIso) {
       app.lastIso = iso;
-      render();
+      render({ preserveFolderScroll: true });
     }
   }, 10_000);
 }

@@ -1,7 +1,6 @@
-import { allSheets, findFolder } from "./store.js";
+import { allSheets, findFolder, getCheckValue } from "./store.js";
 import { todayISOAmsterdam, daysInMonth, pad2 } from "./time.js";
 
-/* ===== helpers ===== */
 function escapeHtml(str) {
   return String(str)
     .replaceAll("&", "&amp;")
@@ -17,7 +16,6 @@ function parseISO(iso) {
 }
 
 function isoToDMY(iso) {
-  // YYYY-MM-DD -> DD/MM/YYYY
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
@@ -156,9 +154,8 @@ export function renderSidebar(route, data) {
     } else {
       const today = todayISOAmsterdam();
       for (const sheet of folder.sheets) {
-        const doneToday = !!sheet.checks[today];
+        const doneToday = !!sheet.checks?.[today];
 
-        // Row itself is not navigational. Only name (rename) + trash (delete).
         const row = document.createElement("div");
         row.className = "sheet";
         row.style.cursor = "default";
@@ -203,7 +200,7 @@ export function computeTodayStats(data) {
   const iso = todayISOAmsterdam();
   const sheets = allSheets(data);
   const total = sheets.length;
-  const done = sheets.filter(x => !!x.sheet.checks[iso]).length;
+  const done = sheets.filter(x => !!x.sheet.checks?.[iso]).length;
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
   return { iso, total, done, percent };
 }
@@ -306,7 +303,7 @@ function renderDashboardListHTML(data, range) {
     <div style="display:flex; flex-direction:column; gap:8px;">
       ${sheets.map(({ folder, sheet }) => {
         if (isSingleDay) {
-          const done = !!sheet.checks[today];
+          const done = !!sheet.checks?.[today];
           return `
             <div class="pill" style="justify-content:space-between;">
               <span>${escapeHtml(folder.name)} / <b>${escapeHtml(sheet.name)}</b></span>
@@ -315,7 +312,7 @@ function renderDashboardListHTML(data, range) {
           `;
         } else {
           let c = 0;
-          for (const k of keys) if (sheet.checks[k]) c++;
+          for (const k of keys) if (sheet.checks?.[k]) c++;
           return `
             <div class="pill" style="justify-content:space-between;">
               <span>${escapeHtml(folder.name)} / <b>${escapeHtml(sheet.name)}</b></span>
@@ -365,7 +362,7 @@ export function drawDashboardPie(data) {
   ctx.fillText(pct, cx - tw / 2, cy + 8);
 }
 
-/* ===== Folder Overview (sync scroll + auto-scroll to today) ===== */
+/* ===== Folder Overview (neon colors + narrower habit col) ===== */
 
 export function renderFolderOverview(route, data, monthCursor) {
   const view = document.querySelector("#view");
@@ -384,11 +381,12 @@ export function renderFolderOverview(route, data, monthCursor) {
 
   const todayIso = todayISOAmsterdam();
   const t = parseISO(todayIso);
-
   const isThisMonth = (t.y === y && t.m === m);
   const todayIndex = isThisMonth ? t.d : 1;
 
-  const habitColW = 200;
+  // ↓ narrowed: was 200. This is the lever to see more days.
+  // You can tweak to 140/150 depending on how cramped you want it.
+  const habitColW = 150;
   const cellW = 44;
   const headerH = 44;
 
@@ -404,9 +402,7 @@ export function renderFolderOverview(route, data, monthCursor) {
 
   const dayHeaders = Array.from({ length: monthDays }, (_, i) => {
     const day = i + 1;
-    const key = `${y}-${pad2(m)}-${pad2(day)}`;
     const isToday = isThisMonth && day === todayIndex;
-
     return `
       <div
         class="${isToday ? "fv-today-col" : ""}"
@@ -418,7 +414,6 @@ export function renderFolderOverview(route, data, monthCursor) {
           font-weight:${isToday ? "900" : "700"};
           color:${isToday ? "var(--text)" : "var(--muted)"};
         "
-        title="${key}"
       >${day}</div>
     `;
   }).join("");
@@ -444,7 +439,7 @@ export function renderFolderOverview(route, data, monthCursor) {
     const cells = Array.from({ length: monthDays }, (_, i) => {
       const day = i + 1;
       const key = `${y}-${pad2(m)}-${pad2(day)}`;
-      const done = !!h.checks?.[key];
+      const color = getCheckValue(h, key);
       const isToday = isThisMonth && day === todayIndex;
 
       return `
@@ -454,20 +449,19 @@ export function renderFolderOverview(route, data, monthCursor) {
           data-folder="${folder.id}"
           data-sheet="${h.id}"
           data-iso="${key}"
-          aria-label="${escapeHtml(h.name)} on ${key} ${done ? "off" : "on"}"
+          data-color="${color || ""}"
+          aria-label="${escapeHtml(h.name)} on ${key}"
           style="
             width:${cellW}px; min-width:${cellW}px; max-width:${cellW}px;
             height:${cellW}px;
             border:none;
             border-top:1px solid var(--border);
             border-right:1px solid var(--border);
-            background:${done ? "rgba(74,222,128,0.14)" : "rgba(255,255,255,0.02)"};
-            color:${done ? "var(--good)" : "transparent"};
-            font-weight:900;
+            background:${color ? `var(--c-${color})` : "rgba(255,255,255,0.02)"};
             cursor:pointer;
             -webkit-tap-highlight-color: transparent;
           "
-        >✓</button>
+        ></button>
       `;
     }).join("");
 
@@ -479,7 +473,7 @@ export function renderFolderOverview(route, data, monthCursor) {
       <div class="cal-header">
         <div>
           <div class="cal-title">${escapeHtml(folder.name)} — Overview</div>
-          <div class="muted">Tap a cell to toggle. (Auto-scroll opens near today's date.)</div>
+          <div class="muted">Tap a cell to pick a color.</div>
         </div>
         <div class="cal-nav">
           <button class="btn" id="prevMonthBtn" type="button" aria-label="Previous month">←</button>
@@ -488,6 +482,15 @@ export function renderFolderOverview(route, data, monthCursor) {
       </div>
 
       <style>
+        /* Neon-ish / “3D” palette */
+        :root{
+          --c-red:    radial-gradient(circle at 30% 30%, rgba(255,90,90,0.95), rgba(255,30,140,0.55) 55%, rgba(255,0,80,0.35));
+          --c-yellow: radial-gradient(circle at 30% 30%, rgba(255,240,80,0.95), rgba(255,180,0,0.55) 55%, rgba(255,120,0,0.35));
+          --c-pink:   radial-gradient(circle at 30% 30%, rgba(255,120,220,0.95), rgba(255,60,140,0.55) 55%, rgba(255,0,110,0.35));
+          --c-purple: radial-gradient(circle at 30% 30%, rgba(190,120,255,0.95), rgba(120,70,255,0.55) 55%, rgba(80,40,255,0.35));
+          --c-blue:   radial-gradient(circle at 30% 30%, rgba(90,220,255,0.95), rgba(60,120,255,0.55) 55%, rgba(0,80,255,0.35));
+        }
+
         .fv-shell{
           border:1px solid var(--border);
           border-radius:12px;
@@ -533,8 +536,17 @@ export function renderFolderOverview(route, data, monthCursor) {
           overflow-y:hidden;
           -webkit-overflow-scrolling: touch;
         }
+        .fv-cell{
+          position: relative;
+        }
+        .fv-cell[data-color]:not([data-color=""]){
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,0.18),
+            inset 0 10px 22px rgba(255,255,255,0.10),
+            0 10px 26px rgba(0,0,0,0.18);
+        }
         .fv-today-col{
-          background: rgba(96,165,250,0.10) !important;
+          box-shadow: inset 0 0 0 9999px rgba(96,165,250,0.10);
         }
       </style>
 
@@ -543,7 +555,7 @@ export function renderFolderOverview(route, data, monthCursor) {
         data-todayindex="${todayIndex}"
         data-isthismonth="${isThisMonth ? "1" : "0"}"
       >
-        <div class="fv-scroll-y">
+        <div class="fv-scroll-y" id="fvYScroll">
           <div class="fv-header">
             <div class="fv-header-left">Habit</div>
             <div class="fv-header-right" id="fvXHead">
@@ -563,13 +575,8 @@ export function renderFolderOverview(route, data, monthCursor) {
   `;
 }
 
-/**
- * MUST be called after renderFolderOverview().
- * Fixes:
- * - header + body horizontal scroll stay in sync (because inline scripts won't run)
- * - auto-scrolls horizontally to today's column when opening the view
- */
-export function wireFolderOverview() {
+/* keep these exported helpers as-is for main.js */
+export function wireFolderOverview({ autoScrollToToday = false } = {}) {
   const shell = document.getElementById("fvShell");
   const head = document.getElementById("fvXHead");
   const body = document.getElementById("fvXBody");
@@ -579,7 +586,6 @@ export function wireFolderOverview() {
   const todayIndex = Number(shell.dataset.todayindex || "1");
   const isThisMonth = shell.dataset.isthismonth === "1";
 
-  // 1) Sync scroll
   let lock = false;
   const sync = (from, to) => {
     if (lock) return;
@@ -590,13 +596,27 @@ export function wireFolderOverview() {
   head.addEventListener("scroll", () => sync(head, body), { passive: true });
   body.addEventListener("scroll", () => sync(body, head), { passive: true });
 
-  // 2) Auto-scroll to today (center-ish)
-  // Only if current month; otherwise leave at start.
-  if (isThisMonth) {
-    // Scroll so that today is not pinned at far left; aim a bit earlier.
-    const targetCol = Math.max(1, todayIndex - 3); // show a few days before today
-    const targetLeft = (targetCol - 1) * cellW;
-    body.scrollLeft = targetLeft;
-    head.scrollLeft = targetLeft;
+  if (autoScrollToToday && isThisMonth) {
+    const targetCol = Math.max(1, todayIndex - 3);
+    const left = (targetCol - 1) * cellW;
+    body.scrollLeft = left;
+    head.scrollLeft = left;
   }
+}
+
+export function captureFolderScroll() {
+  return {
+    y: document.getElementById("fvYScroll")?.scrollTop ?? 0,
+    x: document.getElementById("fvXBody")?.scrollLeft ?? 0,
+  };
+}
+
+export function restoreFolderScroll(state) {
+  const yEl = document.getElementById("fvYScroll");
+  const xBody = document.getElementById("fvXBody");
+  const xHead = document.getElementById("fvXHead");
+
+  if (yEl) yEl.scrollTop = state?.y ?? 0;
+  if (xBody) xBody.scrollLeft = state?.x ?? 0;
+  if (xHead) xHead.scrollLeft = state?.x ?? 0;
 }
