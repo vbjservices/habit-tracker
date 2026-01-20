@@ -202,7 +202,7 @@ body{
   background: rgba(0,0,0,0.15);
   backdrop-filter: blur(10px);
   position: relative;
-  z-index: 10; /* keep topbar above main content */
+  z-index: 10;
 }
 
 .topbar-left{
@@ -373,7 +373,6 @@ canvas{ background: rgba(0,0,0,0.15); border-radius:12px; border:1px solid var(-
     grid-template-columns: 1fr;
   }
 
-  /* Sidebar becomes an off-canvas drawer */
   .sidebar{
     position: fixed;
     top: 0;
