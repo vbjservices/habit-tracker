@@ -9,7 +9,7 @@ function applyTheme(theme) {
 
   const btn = document.getElementById("themeBtn");
   if (btn) {
-    // Keep it simple + fun
+    // Show the mode icon (simple + standard)
     btn.textContent = t === "light" ? "☀️" : "🌙";
     btn.title = t === "light" ? "Switch to dark mode" : "Switch to light mode";
     btn.setAttribute("aria-label", btn.title);
