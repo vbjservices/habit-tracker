@@ -1,8 +1,9 @@
 /* =========================
-   Simple Habits MVP
+   Simple Habits MVP (Mobile-ready)
    - Folders -> Sheets -> Calendar checks per day
    - Dashboard pie shows today's completion across ALL sheets
    - Storage: localStorage
+   - Mobile: off-canvas sidebar drawer + overlay
 ========================= */
 
 const STORAGE_KEY = "habitAppData_v1";
@@ -54,6 +55,14 @@ function loadData() {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return { folders: [] };
     if (!Array.isArray(parsed.folders)) parsed.folders = [];
+    // normalize legacy
+    for (const f of parsed.folders) {
+      if (!Array.isArray(f.sheets)) f.sheets = [];
+      if (typeof f.open !== "boolean") f.open = true;
+      for (const s of f.sheets) {
+        if (!s.checks || typeof s.checks !== "object") s.checks = {};
+      }
+    }
     return parsed;
   } catch {
     return { folders: [] };
@@ -79,6 +88,47 @@ function allSheets() {
     for (const s of f.sheets) out.push({ folder: f, sheet: s });
   }
   return out;
+}
+
+/* =========================
+   Mobile sidebar drawer
+========================= */
+
+function isMobile() {
+  return window.matchMedia("(max-width: 980px)").matches;
+}
+
+function openSidebar() {
+  const sidebar = $("#sidebar");
+  const overlay = $("#sidebarOverlay");
+  if (!sidebar || !overlay) return;
+
+  sidebar.classList.add("open");
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeSidebar() {
+  const sidebar = $("#sidebar");
+  const overlay = $("#sidebarOverlay");
+  if (!sidebar || !overlay) return;
+
+  sidebar.classList.remove("open");
+  overlay.classList.remove("open");
+  overlay.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function toggleSidebar() {
+  const sidebar = $("#sidebar");
+  if (!sidebar) return;
+  if (sidebar.classList.contains("open")) closeSidebar();
+  else openSidebar();
+}
+
+function closeSidebarIfMobile() {
+  if (isMobile()) closeSidebar();
 }
 
 /* =========================
@@ -170,16 +220,20 @@ function toggleCheck(folderId, sheetId, isoDate) {
 function goDashboard() {
   state.route = { view: "dashboard", folderId: null, sheetId: null };
   render();
+  closeSidebarIfMobile();
 }
 
 function openSheet(folderId, sheetId) {
   state.route = { view: "sheet", folderId, sheetId };
   state.monthCursor = new Date(); // reset to current month when opening
   render();
+  closeSidebarIfMobile();
 }
 
 function setBreadcrumbs() {
   const el = $("#breadcrumbs");
+  if (!el) return;
+
   if (state.route.view === "dashboard") {
     el.innerHTML = `<b>Dashboard</b> <span class="muted">— overzicht vandaag</span>`;
     return;
@@ -198,6 +252,8 @@ function render() {
   setBreadcrumbs();
 
   const view = $("#view");
+  if (!view) return;
+
   if (state.route.view === "dashboard") {
     view.innerHTML = renderDashboardHTML();
     drawDashboardPie();
@@ -212,6 +268,8 @@ function render() {
 
 function renderSidebar() {
   const nav = $("#sidebarNav");
+  if (!nav) return;
+
   nav.innerHTML = "";
 
   if (state.data.folders.length === 0) {
@@ -460,7 +518,6 @@ function renderSheetHTML() {
 
   const d = state.monthCursor;
   const monthStart = startOfMonth(d);
-  const days = daysInMonth(d);
   const offset = weekdayIndexMonFirst(monthStart);
 
   const weekdays = ["Ma","Di","Wo","Do","Vr","Za","Zo"].map(w => `<div class="weekday">${w}</div>`).join("");
@@ -592,34 +649,53 @@ function importJSONFile(file) {
 ========================= */
 
 function wireGlobalEvents() {
-  $("#addFolderBtn").addEventListener("click", () => {
+  // Mobile menu toggle
+  $("#menuBtn")?.addEventListener("click", toggleSidebar);
+
+  // Overlay closes drawer
+  $("#sidebarOverlay")?.addEventListener("click", closeSidebar);
+
+  // ESC closes drawer
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSidebar();
+  });
+
+  // When resizing from mobile->desktop, ensure body scroll restored
+  window.addEventListener("resize", () => {
+    if (!isMobile()) {
+      closeSidebar();
+      // On desktop we definitely want scroll enabled
+      document.body.style.overflow = "";
+    }
+  });
+
+  $("#addFolderBtn")?.addEventListener("click", () => {
     const name = prompt("Naam van mapje (bv. fitness):");
     if (name && name.trim()) addFolder(name.trim());
   });
 
-  $("#goDashboardBtn").addEventListener("click", goDashboard);
+  $("#goDashboardBtn")?.addEventListener("click", goDashboard);
 
-  $("#todayBtn").addEventListener("click", () => {
+  $("#todayBtn")?.addEventListener("click", () => {
     if (state.route.view === "sheet") {
       state.monthCursor = new Date();
       render();
     } else {
-      // dashboard just rerender
       render();
     }
   });
 
-  $("#exportBtn").addEventListener("click", exportJSON);
+  $("#exportBtn")?.addEventListener("click", exportJSON);
 
-  $("#importBtn").addEventListener("click", () => $("#importFile").click());
-  $("#importFile").addEventListener("change", (e) => {
+  $("#importBtn")?.addEventListener("click", () => $("#importFile")?.click());
+  $("#importFile")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (file) importJSONFile(file);
     e.target.value = "";
   });
 
   // calendar interactions (event delegation)
-  $("#view").addEventListener("click", (e) => {
+  $("#view")?.addEventListener("click", (e) => {
     if (state.route.view !== "sheet") return;
 
     const prevBtn = e.target.closest("#prevMonthBtn");
@@ -642,6 +718,16 @@ function wireGlobalEvents() {
 
     const iso = day.dataset.iso;
     toggleCheck(state.route.folderId, state.route.sheetId, iso);
+  });
+
+  // Close sidebar when clicking any navigation item in sidebar (mobile)
+  $("#sidebarNav")?.addEventListener("click", (e) => {
+    // if user taps a sheet row or folder area, we let existing handlers run
+    // but still close if a sheet was clicked (openSheet already closes)
+    // this is a fallback: if they click plain dashboard/export/import etc. already handled.
+    if (isMobile()) {
+      // no-op here; openSheet/goDashboard already close.
+    }
   });
 }
 

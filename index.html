@@ -8,7 +8,10 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
+    <!-- Mobile overlay -->
+    <div id="sidebarOverlay" class="sidebar-overlay" aria-hidden="true"></div>
+
+    <aside id="sidebar" class="sidebar" aria-label="Navigatie">
       <div class="sidebar-header">
         <div class="brand">
           <div class="brand-title">Habits</div>
@@ -30,7 +33,11 @@
 
     <main class="main">
       <header class="topbar">
-        <div class="breadcrumbs" id="breadcrumbs"></div>
+        <div class="topbar-left">
+          <button id="menuBtn" class="icon-btn menu-btn" aria-label="Open menu" title="Menu">☰</button>
+          <div class="breadcrumbs" id="breadcrumbs"></div>
+        </div>
+
         <div class="topbar-actions">
           <button id="todayBtn" class="btn">Vandaag</button>
         </div>
