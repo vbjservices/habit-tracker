@@ -46,6 +46,10 @@ export function endOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
+export function daysInMonth(d) {
+  return endOfMonth(d).getDate();
+}
+
 // Monday-first weekday index (Mon=0..Sun=6)
 export function weekdayIndexMonFirst(date) {
   const js = date.getDay(); // Sun=0..Sat=6
@@ -54,4 +58,8 @@ export function weekdayIndexMonFirst(date) {
 
 export function addMonths(cursor, delta) {
   return new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
+}
+
+export function pad2(n) {
+  return String(n).padStart(2, "0");
 }

@@ -16,6 +16,7 @@ import {
   renderSidebar,
   renderDashboard,
   renderSheet,
+  renderFolderOverview,
   setBreadcrumbs,
   setTopRightButton
 } from "./ui.js";
@@ -28,8 +29,7 @@ const app = {
   monthCursor: new Date(),
   lastIso: null,
 
-  // NEW: dashboard range
-  dashboardRange: "1D", // "1D" | "7D" | "14D" | "1M"
+  dashboardRange: "1D",
 };
 
 function persist() {
@@ -87,6 +87,13 @@ function openSheetRoute(folderId, sheetId) {
   closeSidebarIfMobile();
 }
 
+function openFolderRoute(folderId) {
+  app.route = { view: "folder", folderId, sheetId: null };
+  app.monthCursor = new Date();
+  render();
+  closeSidebarIfMobile();
+}
+
 /* ===== Render pipeline ===== */
 function render() {
   renderSidebar(app.route, app.data);
@@ -95,9 +102,15 @@ function render() {
 
   if (app.route.view === "dashboard") {
     renderDashboard(app.data, app.dashboardRange);
-  } else {
-    renderSheet(app.route, app.data, app.monthCursor);
+    return;
   }
+
+  if (app.route.view === "folder") {
+    renderFolderOverview(app.route, app.data, app.monthCursor);
+    return;
+  }
+
+  renderSheet(app.route, app.data, app.monthCursor);
 }
 
 /* ===== Events ===== */
@@ -144,7 +157,7 @@ function wireEvents() {
 
   $("#topRightBtn")?.addEventListener("click", (e) => {
     e.preventDefault();
-    if (app.route.view === "sheet") {
+    if (app.route.view !== "dashboard") {
       goDashboard();
       return;
     }
@@ -175,6 +188,19 @@ function wireEvents() {
 
   // Sidebar delegation
   $("#sidebarNav")?.addEventListener("click", (e) => {
+    // Folder collapse/expand (chevron button)
+    const toggleBtn = e.target.closest("[data-toggle-folder='1']");
+    if (toggleBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const folderId = toggleBtn.dataset.folder;
+      toggleFolderOpen(app.data, folderId);
+      persist();
+      render();
+      return;
+    }
+
+    // Folder actions buttons (add/rename/delete)
     const btn = e.target.closest("button[data-action]");
     if (btn) {
       e.preventDefault();
@@ -184,7 +210,7 @@ function wireEvents() {
       const folderId = btn.dataset.folder;
 
       if (action === "add-sheet") {
-        const name = prompt("Naam van sheet (bv. sporten):");
+        const name = prompt("Naam van sheet (bv. joggen):");
         if (name && name.trim()) {
           addSheet(app.data, folderId, name.trim());
           persist();
@@ -213,23 +239,18 @@ function wireEvents() {
           else render();
         }
       }
-
       return;
     }
 
-    const folderHead = e.target.closest(".folder-head");
-    if (folderHead && !e.target.closest("button")) {
-      const folderEl = folderHead.closest(".folder");
-      const anyAction = folderEl?.querySelector("button[data-folder]");
-      const folderId = anyAction?.dataset.folder;
-      if (folderId) {
-        toggleFolderOpen(app.data, folderId);
-        persist();
-        render();
-      }
+    // Open folder overview when clicking folder head (not the toggle button)
+    const folderHead = e.target.closest("[data-folder-head='1']");
+    if (folderHead) {
+      const folderId = folderHead.dataset.folder;
+      openFolderRoute(folderId);
       return;
     }
 
+    // Open sheet
     const sheetRow = e.target.closest(".sheet[data-open-sheet='1']");
     if (sheetRow) {
       const folderId = sheetRow.dataset.folder;
@@ -239,39 +260,51 @@ function wireEvents() {
     }
   });
 
-  // Calendar delegation
+  // Main view delegation
   $("#view")?.addEventListener("click", (e) => {
-    // NEW: dashboard range selector delegation
+    // Dashboard range selector
     const rangeBtn = e.target.closest("[data-range]");
     if (rangeBtn && app.route.view === "dashboard") {
-      const next = rangeBtn.dataset.range; // "1D" | "7D" | "14D" | "1M"
-      app.dashboardRange = next;
+      app.dashboardRange = rangeBtn.dataset.range;
       render();
       return;
     }
 
-    if (app.route.view !== "sheet") return;
-
+    // Month navigation (sheet + folder)
     const prev = e.target.closest("#prevMonthBtn");
     const next = e.target.closest("#nextMonthBtn");
-    if (prev) {
+    if (prev && (app.route.view === "sheet" || app.route.view === "folder")) {
       app.monthCursor = addMonths(app.monthCursor, -1);
       render();
       return;
     }
-    if (next) {
+    if (next && (app.route.view === "sheet" || app.route.view === "folder")) {
       app.monthCursor = addMonths(app.monthCursor, 1);
       render();
       return;
     }
 
-    const day = e.target.closest(".day");
-    if (!day) return;
+    // Folder overview cell toggle
+    const fvCell = e.target.closest(".fv-cell");
+    if (fvCell && app.route.view === "folder") {
+      const folderId = fvCell.dataset.folder;
+      const sheetId = fvCell.dataset.sheet;
+      const isoKey = fvCell.dataset.iso;
+      toggleCheck(app.data, folderId, sheetId, isoKey);
+      persist();
+      render();
+      return;
+    }
 
-    const isoKey = day.dataset.iso; // YYYY-MM-DD
-    toggleCheck(app.data, app.route.folderId, app.route.sheetId, isoKey);
-    persist();
-    render();
+    // Sheet day toggle
+    const day = e.target.closest(".day");
+    if (day && app.route.view === "sheet") {
+      const isoKey = day.dataset.iso;
+      toggleCheck(app.data, app.route.folderId, app.route.sheetId, isoKey);
+      persist();
+      render();
+      return;
+    }
   });
 }
 
