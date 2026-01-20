@@ -8,6 +8,7 @@ import {
   addSheet,
   renameSheet,
   deleteSheet,
+  moveSheet,
   setCheckColor,
   findFolder,
   findSheet,
@@ -29,6 +30,7 @@ import {
 } from "./ui.js";
 
 import { openColorPicker } from "./modal.js";
+import { initSidebarDnD } from "./dnd.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -361,6 +363,15 @@ function startAutoDayRollover() {
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", () => {
   wireEvents();
+
+  initSidebarDnD({
+    rootEl: document.querySelector("#sidebarNav"),
+    onMove: ({ fromFolderId, sheetId, toFolderId, toIndex }) => {
+      moveSheet(app.data, fromFolderId, sheetId, toFolderId, toIndex);
+      persist();
+      render({ preserveFolderScroll: app.route.view === "folder" });
+    },
+  });
   render();
   startAutoDayRollover();
-});
+})

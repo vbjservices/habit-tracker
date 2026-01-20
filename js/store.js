@@ -41,13 +41,13 @@ export function allSheets(data) {
 }
 
 export function findFolder(data, folderId) {
-  return data.folders.find(f => f.id === folderId) || null;
+  return data.folders.find((f) => f.id === folderId) || null;
 }
 
 export function findSheet(data, folderId, sheetId) {
   const folder = findFolder(data, folderId);
   if (!folder) return null;
-  return (folder.sheets || []).find(s => s.id === sheetId) || null;
+  return (folder.sheets || []).find((s) => s.id === sheetId) || null;
 }
 
 export function addFolder(data, name) {
@@ -65,7 +65,7 @@ export function renameFolder(data, folderId, name) {
 }
 
 export function deleteFolder(data, folderId) {
-  data.folders = data.folders.filter(f => f.id !== folderId);
+  data.folders = data.folders.filter((f) => f.id !== folderId);
 }
 
 export function toggleFolderOpen(data, folderId) {
@@ -91,7 +91,33 @@ export function renameSheet(data, folderId, sheetId, name) {
 export function deleteSheet(data, folderId, sheetId) {
   const f = findFolder(data, folderId);
   if (!f) return;
-  f.sheets = (f.sheets || []).filter(s => s.id !== sheetId);
+  f.sheets = (f.sheets || []).filter((s) => s.id !== sheetId);
+}
+
+// NEW: move/reorder sheet (supports between folders + between other sheets)
+export function moveSheet(data, fromFolderId, sheetId, toFolderId, toIndex) {
+  if (!fromFolderId || !sheetId || !toFolderId) return;
+
+  const fromFolder = findFolder(data, fromFolderId);
+  const toFolder = findFolder(data, toFolderId);
+  if (!fromFolder || !toFolder) return;
+
+  const fromList = fromFolder.sheets || [];
+  const idx = fromList.findIndex((s) => s.id === sheetId);
+  if (idx === -1) return;
+
+  const [sheet] = fromList.splice(idx, 1);
+
+  const toList = toFolder.sheets || (toFolder.sheets = []);
+  let insertAt = Number.isFinite(toIndex) ? toIndex : toList.length;
+
+  // If moving within same folder, and removing earlier index affects insert index
+  if (fromFolderId === toFolderId && idx < insertAt) {
+    insertAt = Math.max(0, insertAt - 1);
+  }
+
+  insertAt = Math.max(0, Math.min(insertAt, toList.length));
+  toList.splice(insertAt, 0, sheet);
 }
 
 // NEW: set/clear a color for a day
@@ -103,7 +129,7 @@ export function setCheckColor(data, folderId, sheetId, isoKey, colorOrNull) {
     delete s.checks[isoKey];
     return;
   }
-  s.checks[isoKey] = colorOrNull; // "red"|"yellow"|...
+  s.checks[isoKey] = colorOrNull;
 }
 
 // Backwards compatibility helper for reads

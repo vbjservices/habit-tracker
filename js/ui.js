@@ -38,6 +38,7 @@ function getRangeKeys(range) {
   let days = 1;
   if (range === "7D") days = 7;
   if (range === "14D") days = 14;
+  if (range === "21D") days = 21;
   if (range === "1M") days = 30;
 
   const keys = [];
@@ -110,6 +111,7 @@ export function renderSidebar(route, data) {
     const folderEl = document.createElement("div");
     folderEl.className = "folder";
     folderEl.setAttribute("data-folder", folder.id);
+    folderEl.setAttribute("data-dnd-folder", "1");
 
     const head = document.createElement("div");
     head.className = "folder-head";
@@ -159,6 +161,10 @@ export function renderSidebar(route, data) {
         const row = document.createElement("div");
         row.className = "sheet";
         row.style.cursor = "default";
+        row.setAttribute("draggable", "true");
+        row.setAttribute("data-dnd-sheet-row", "1");
+        row.dataset.folder = folder.id;
+        row.dataset.sheet = sheet.id;
         row.innerHTML = `
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;">
             <div
@@ -251,6 +257,7 @@ function renderRangeSelectorHTML(active) {
     ["1D", "1D"],
     ["7D", "7D"],
     ["14D", "14D"],
+    ["21D", "21D"],
     ["1M", "1M"],
   ];
 
@@ -379,6 +386,8 @@ export function renderFolderOverview(route, data, monthCursor) {
   const m = monthCursor.getMonth() + 1;
   const monthDays = daysInMonth(monthCursor);
 
+  const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(monthCursor);
+
   const todayIso = todayISOAmsterdam();
   const t = parseISO(todayIso);
   const isThisMonth = (t.y === y && t.m === m);
@@ -393,7 +402,7 @@ export function renderFolderOverview(route, data, monthCursor) {
   if (habits.length === 0) {
     view.innerHTML = `
       <div class="card">
-        <h2>${escapeHtml(folder.name)} — Overview</h2>
+        <h2>${escapeHtml(folder.name)} — ${escapeHtml(monthLabel)}</h2>
         <div class="muted">No habits in this folder yet. Click + to add one.</div>
       </div>
     `;
@@ -472,7 +481,7 @@ export function renderFolderOverview(route, data, monthCursor) {
     <div class="card">
       <div class="cal-header">
         <div>
-          <div class="cal-title">${escapeHtml(folder.name)} — Overview</div>
+          <div class="cal-title">${escapeHtml(folder.name)} — ${escapeHtml(monthLabel)}</div>
           <div class="muted">Tap a cell to pick a color.</div>
         </div>
         <div class="cal-nav">
