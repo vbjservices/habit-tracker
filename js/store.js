@@ -1,33 +1,26 @@
-const STORAGE_KEY = "habitAppData_v1";
+const STORAGE_KEY = "habits_mvp_v1";
 
-function uid() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
-function normalize(data) {
-  if (!data || typeof data !== "object") return { folders: [] };
-  if (!Array.isArray(data.folders)) data.folders = [];
-
-  for (const f of data.folders) {
-    if (!f.id) f.id = uid();
-    if (typeof f.name !== "string") f.name = "Mapje";
-    if (typeof f.open !== "boolean") f.open = true;
-    if (!Array.isArray(f.sheets)) f.sheets = [];
-
-    for (const s of f.sheets) {
-      if (!s.id) s.id = uid();
-      if (typeof s.name !== "string") s.name = "Sheet";
-      if (!s.checks || typeof s.checks !== "object") s.checks = {};
-    }
-  }
-  return data;
+function uid(prefix = "id") {
+  return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
 }
 
 export function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { folders: [] };
-    return normalize(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.folders)) {
+      return { folders: [] };
+    }
+    // Basic normalization
+    for (const f of parsed.folders) {
+      if (!Array.isArray(f.sheets)) f.sheets = [];
+      if (typeof f.open !== "boolean") f.open = true;
+      for (const s of f.sheets) {
+        if (!s.checks || typeof s.checks !== "object") s.checks = {};
+      }
+    }
+    return parsed;
   } catch {
     return { folders: [] };
   }
@@ -37,6 +30,16 @@ export function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
+export function allSheets(data) {
+  const out = [];
+  for (const folder of data.folders) {
+    for (const sheet of (folder.sheets || [])) {
+      out.push({ folder, sheet });
+    }
+  }
+  return out;
+}
+
 export function findFolder(data, folderId) {
   return data.folders.find(f => f.id === folderId) || null;
 }
@@ -44,70 +47,60 @@ export function findFolder(data, folderId) {
 export function findSheet(data, folderId, sheetId) {
   const folder = findFolder(data, folderId);
   if (!folder) return null;
-  return folder.sheets.find(s => s.id === sheetId) || null;
+  return (folder.sheets || []).find(s => s.id === sheetId) || null;
 }
 
-export function allSheets(data) {
-  const out = [];
-  for (const f of data.folders) {
-    for (const s of f.sheets) out.push({ folder: f, sheet: s });
-  }
-  return out;
-}
-
-/* CRUD */
 export function addFolder(data, name) {
-  data.folders.push({ id: uid(), name, open: true, sheets: [] });
-  return data;
+  data.folders.push({
+    id: uid("folder"),
+    name,
+    open: true,
+    sheets: [],
+  });
 }
 
 export function renameFolder(data, folderId, name) {
-  const folder = findFolder(data, folderId);
-  if (folder) folder.name = name;
-  return data;
+  const f = findFolder(data, folderId);
+  if (f) f.name = name;
 }
 
 export function deleteFolder(data, folderId) {
   data.folders = data.folders.filter(f => f.id !== folderId);
-  return data;
 }
 
 export function toggleFolderOpen(data, folderId) {
-  const folder = findFolder(data, folderId);
-  if (folder) folder.open = !folder.open;
-  return data;
+  const f = findFolder(data, folderId);
+  if (f) f.open = !f.open;
 }
 
 export function addSheet(data, folderId, name) {
-  const folder = findFolder(data, folderId);
-  if (!folder) return data;
-  folder.sheets.push({ id: uid(), name, checks: {} });
-  return data;
+  const f = findFolder(data, folderId);
+  if (!f) return;
+  f.sheets.push({
+    id: uid("sheet"),
+    name,
+    checks: {},
+  });
 }
 
 export function renameSheet(data, folderId, sheetId, name) {
-  const sheet = findSheet(data, folderId, sheetId);
-  if (sheet) sheet.name = name;
-  return data;
+  const s = findSheet(data, folderId, sheetId);
+  if (s) s.name = name;
 }
 
 export function deleteSheet(data, folderId, sheetId) {
-  const folder = findFolder(data, folderId);
-  if (!folder) return data;
-  folder.sheets = folder.sheets.filter(s => s.id !== sheetId);
-  return data;
+  const f = findFolder(data, folderId);
+  if (!f) return;
+  f.sheets = (f.sheets || []).filter(s => s.id !== sheetId);
 }
 
-export function toggleCheck(data, folderId, sheetId, isoDate) {
-  const sheet = findSheet(data, folderId, sheetId);
-  if (!sheet) return data;
-
-  sheet.checks[isoDate] = !sheet.checks[isoDate];
-  if (!sheet.checks[isoDate]) delete sheet.checks[isoDate];
-  return data;
+export function toggleCheck(data, folderId, sheetId, isoKey) {
+  const s = findSheet(data, folderId, sheetId);
+  if (!s) return;
+  if (s.checks[isoKey]) delete s.checks[isoKey];
+  else s.checks[isoKey] = true;
 }
 
-/* Export/Import */
 export function exportJSON(data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -120,14 +113,17 @@ export function exportJSON(data) {
   URL.revokeObjectURL(url);
 }
 
-export function importJSONFile(file, onLoaded) {
+export function importJSONFile(file, cb) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const parsed = normalize(JSON.parse(String(reader.result)));
-      onLoaded(parsed);
-    } catch {
-      alert("Kon JSON niet lezen.");
+      const parsed = JSON.parse(String(reader.result || "{}"));
+      if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.folders)) {
+        throw new Error("Invalid JSON structure");
+      }
+      cb(parsed);
+    } catch (e) {
+      alert("Import failed: invalid JSON");
     }
   };
   reader.readAsText(file);

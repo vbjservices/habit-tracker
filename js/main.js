@@ -6,6 +6,8 @@ import {
   deleteFolder,
   toggleFolderOpen,
   addSheet,
+  renameSheet,
+  deleteSheet,
   toggleCheck,
   exportJSON,
   importJSONFile,
@@ -15,8 +17,8 @@ import { todayISOAmsterdam, addMonths } from "./time.js";
 import {
   renderSidebar,
   renderDashboard,
-  renderSheet,
   renderFolderOverview,
+  wireFolderOverview,
   setBreadcrumbs,
   setTopRightButton
 } from "./ui.js";
@@ -28,7 +30,6 @@ const app = {
   route: { view: "dashboard", folderId: null, sheetId: null },
   monthCursor: new Date(),
   lastIso: null,
-
   dashboardRange: "1D",
 };
 
@@ -80,13 +81,6 @@ function goDashboard() {
   closeSidebarIfMobile();
 }
 
-function openSheetRoute(folderId, sheetId) {
-  app.route = { view: "sheet", folderId, sheetId };
-  app.monthCursor = new Date();
-  render();
-  closeSidebarIfMobile();
-}
-
 function openFolderRoute(folderId) {
   app.route = { view: "folder", folderId, sheetId: null };
   app.monthCursor = new Date();
@@ -107,19 +101,14 @@ function render() {
 
   if (app.route.view === "folder") {
     renderFolderOverview(app.route, app.data, app.monthCursor);
+    // Critical: innerHTML scripts don't run, so we wire behavior here
+    wireFolderOverview();
     return;
   }
-
-  renderSheet(app.route, app.data, app.monthCursor);
 }
 
 /* ===== Events ===== */
 function wireEvents() {
-  const required = ["#sidebar", "#sidebarOverlay", "#menuBtn", "#brandBtn", "#addFolderBtn", "#topRightBtn", "#view", "#sidebarNav"];
-  for (const sel of required) {
-    if (!$(sel)) console.error("Missing required element:", sel);
-  }
-
   $("#menuBtn")?.addEventListener("click", (e) => {
     e.preventDefault();
     toggleSidebarDrawer();
@@ -148,7 +137,7 @@ function wireEvents() {
 
   $("#addFolderBtn")?.addEventListener("click", (e) => {
     e.preventDefault();
-    const name = prompt("Naam van mapje (bv. fitness):");
+    const name = prompt("Folder name (e.g. fitness):");
     if (!name || !name.trim()) return;
     addFolder(app.data, name.trim());
     persist();
@@ -181,14 +170,14 @@ function wireEvents() {
       app.data = parsed;
       persist();
       render();
-      alert("Import gelukt!");
+      alert("Import succeeded!");
     });
     e.target.value = "";
   });
 
   // Sidebar delegation
   $("#sidebarNav")?.addEventListener("click", (e) => {
-    // Folder collapse/expand (chevron button)
+    // Toggle folder open/close (chevron)
     const toggleBtn = e.target.closest("[data-toggle-folder='1']");
     if (toggleBtn) {
       e.preventDefault();
@@ -200,7 +189,24 @@ function wireEvents() {
       return;
     }
 
-    // Folder actions buttons (add/rename/delete)
+    // Rename habit
+    const renameHabit = e.target.closest("[data-rename-sheet='1']");
+    if (renameHabit) {
+      e.preventDefault();
+      e.stopPropagation();
+      const folderId = renameHabit.dataset.folder;
+      const sheetId = renameHabit.dataset.sheet;
+      const current = renameHabit.dataset.name || "";
+      const next = prompt("Rename habit:", current);
+      if (next && next.trim()) {
+        renameSheet(app.data, folderId, sheetId, next.trim());
+        persist();
+        render();
+      }
+      return;
+    }
+
+    // Buttons
     const btn = e.target.closest("button[data-action]");
     if (btn) {
       e.preventDefault();
@@ -210,7 +216,7 @@ function wireEvents() {
       const folderId = btn.dataset.folder;
 
       if (action === "add-sheet") {
-        const name = prompt("Naam van sheet (bv. joggen):");
+        const name = prompt("Habit name (e.g. jogging):");
         if (name && name.trim()) {
           addSheet(app.data, folderId, name.trim());
           persist();
@@ -218,9 +224,24 @@ function wireEvents() {
         }
       }
 
+      if (action === "delete-sheet") {
+        const sheetId = btn.dataset.sheet;
+        const folder = app.data.folders.find(f => f.id === folderId);
+        const sheet = folder?.sheets?.find(s => s.id === sheetId);
+        const sheetName = sheet?.name || "this habit";
+
+        // Safety check: explicit confirm
+        const ok = confirm(`Delete "${sheetName}"?\n\nThis cannot be undone.`);
+        if (!ok) return;
+
+        deleteSheet(app.data, folderId, sheetId);
+        persist();
+        render();
+      }
+
       if (action === "rename-folder") {
         const folder = app.data.folders.find(f => f.id === folderId);
-        const name = prompt("Nieuwe naam mapje:", folder?.name || "");
+        const name = prompt("New folder name:", folder?.name || "");
         if (name && name.trim()) {
           renameFolder(app.data, folderId, name.trim());
           persist();
@@ -230,7 +251,7 @@ function wireEvents() {
 
       if (action === "delete-folder") {
         const folder = app.data.folders.find(f => f.id === folderId);
-        const ok = confirm(`Mapje "${folder?.name || ""}" verwijderen (incl. sheets)?`);
+        const ok = confirm(`Delete folder "${folder?.name || ""}" (incl. habits)?\n\nThis cannot be undone.`);
         if (ok) {
           const wasInside = app.route.folderId === folderId;
           deleteFolder(app.data, folderId);
@@ -239,23 +260,15 @@ function wireEvents() {
           else render();
         }
       }
+
       return;
     }
 
-    // Open folder overview when clicking folder head (not the toggle button)
+    // Open folder overview
     const folderHead = e.target.closest("[data-folder-head='1']");
     if (folderHead) {
       const folderId = folderHead.dataset.folder;
       openFolderRoute(folderId);
-      return;
-    }
-
-    // Open sheet
-    const sheetRow = e.target.closest(".sheet[data-open-sheet='1']");
-    if (sheetRow) {
-      const folderId = sheetRow.dataset.folder;
-      const sheetId = sheetRow.dataset.sheet;
-      openSheetRoute(folderId, sheetId);
       return;
     }
   });
@@ -270,15 +283,15 @@ function wireEvents() {
       return;
     }
 
-    // Month navigation (sheet + folder)
+    // Month nav (folder view)
     const prev = e.target.closest("#prevMonthBtn");
     const next = e.target.closest("#nextMonthBtn");
-    if (prev && (app.route.view === "sheet" || app.route.view === "folder")) {
+    if (prev && app.route.view === "folder") {
       app.monthCursor = addMonths(app.monthCursor, -1);
       render();
       return;
     }
-    if (next && (app.route.view === "sheet" || app.route.view === "folder")) {
+    if (next && app.route.view === "folder") {
       app.monthCursor = addMonths(app.monthCursor, 1);
       render();
       return;
@@ -291,16 +304,6 @@ function wireEvents() {
       const sheetId = fvCell.dataset.sheet;
       const isoKey = fvCell.dataset.iso;
       toggleCheck(app.data, folderId, sheetId, isoKey);
-      persist();
-      render();
-      return;
-    }
-
-    // Sheet day toggle
-    const day = e.target.closest(".day");
-    if (day && app.route.view === "sheet") {
-      const isoKey = day.dataset.iso;
-      toggleCheck(app.data, app.route.folderId, app.route.sheetId, isoKey);
       persist();
       render();
       return;

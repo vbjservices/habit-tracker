@@ -1,14 +1,7 @@
-import { allSheets, findFolder, findSheet } from "./store.js";
-import {
-  todayISOAmsterdam,
-  monthTitleNL,
-  startOfMonth,
-  endOfMonth,
-  weekdayIndexMonFirst,
-  daysInMonth,
-  pad2,
-} from "./time.js";
+import { allSheets, findFolder } from "./store.js";
+import { todayISOAmsterdam, daysInMonth, pad2 } from "./time.js";
 
+/* ===== helpers ===== */
 function escapeHtml(str) {
   return String(str)
     .replaceAll("&", "&amp;")
@@ -18,7 +11,18 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
-/* ========= Date range helpers (Dashboard Overview) ========= */
+function parseISO(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return { y, m, d };
+}
+
+function isoToDMY(iso) {
+  // YYYY-MM-DD -> DD/MM/YYYY
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/* ========= Dashboard range helpers ========= */
 function parseISODate(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d));
@@ -47,12 +51,6 @@ function getRangeKeys(range) {
   return keys;
 }
 
-function isoToNLDate(iso) {
-  // iso: YYYY-MM-DD -> DD/MM/YYYY
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-
 /* ===== Top UI ===== */
 
 export function setBreadcrumbs(route, data) {
@@ -60,28 +58,21 @@ export function setBreadcrumbs(route, data) {
   if (!el) return;
 
   if (route.view === "dashboard") {
-    el.innerHTML = `<b>Dashboard</b> <span class="muted">— overzicht vandaag</span>`;
+    el.innerHTML = `<b>Dashboard</b> <span class="muted">— today overview</span>`;
     return;
   }
 
   if (route.view === "folder") {
     const folder = findFolder(data, route.folderId);
     el.innerHTML = `
-      <span class="muted">Mapje</span> <b>${escapeHtml(folder?.name || "")}</b>
+      <span class="muted">Folder</span> <b>${escapeHtml(folder?.name || "")}</b>
       <span class="muted">/</span>
-      <b>Overzicht</b>
+      <b>Overview</b>
     `;
     return;
   }
 
-  const folder = findFolder(data, route.folderId);
-  const sheet = findSheet(data, route.folderId, route.sheetId);
-
-  el.innerHTML = `
-    <span class="muted">Mapje</span> <b>${escapeHtml(folder?.name || "")}</b>
-    <span class="muted">/</span>
-    <span class="muted">Sheet</span> <b>${escapeHtml(sheet?.name || "")}</b>
-  `;
+  el.innerHTML = `<b>Dashboard</b>`;
 }
 
 export function setTopRightButton(route) {
@@ -89,13 +80,13 @@ export function setTopRightButton(route) {
   if (!btn) return;
 
   if (route.view === "dashboard") {
-    btn.textContent = "Vandaag";
-    btn.title = "Ververs vandaag";
-    btn.setAttribute("aria-label", "Ververs vandaag");
+    btn.textContent = "Today";
+    btn.title = "Refresh";
+    btn.setAttribute("aria-label", "Refresh");
   } else {
     btn.textContent = "🏠 Home";
-    btn.title = "Terug naar dashboard";
-    btn.setAttribute("aria-label", "Terug naar dashboard");
+    btn.title = "Back to dashboard";
+    btn.setAttribute("aria-label", "Back to dashboard");
   }
 }
 
@@ -110,8 +101,8 @@ export function renderSidebar(route, data) {
   if (data.folders.length === 0) {
     nav.innerHTML = `
       <div class="card">
-        <h2>Geen mapjes</h2>
-        <div class="muted">Klik op <b>+</b> om je eerste mapje te maken (bv. fitness).</div>
+        <h2>No folders</h2>
+        <div class="muted">Click <b>+</b> to create your first folder.</div>
       </div>
     `;
     return;
@@ -120,7 +111,6 @@ export function renderSidebar(route, data) {
   for (const folder of data.folders) {
     const folderEl = document.createElement("div");
     folderEl.className = "folder";
-    folderEl.setAttribute("data-folder-container", "1");
     folderEl.setAttribute("data-folder", folder.id);
 
     const head = document.createElement("div");
@@ -134,8 +124,8 @@ export function renderSidebar(route, data) {
           type="button"
           class="small-btn"
           style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;"
-          title="${folder.open ? "Inklappen" : "Uitklappen"}"
-          aria-label="${folder.open ? "Inklappen" : "Uitklappen"}"
+          title="${folder.open ? "Collapse" : "Expand"}"
+          aria-label="${folder.open ? "Collapse" : "Expand"}"
           data-toggle-folder="1"
           data-folder="${folder.id}"
         >${folder.open ? "▼" : "▶"}</button>
@@ -145,9 +135,9 @@ export function renderSidebar(route, data) {
         </span>
       </div>
       <div class="folder-actions">
-        <button class="small-btn" title="Nieuwe sheet" aria-label="Nieuwe sheet" data-action="add-sheet" data-folder="${folder.id}">+</button>
-        <button class="small-btn" title="Mapje hernoemen" aria-label="Mapje hernoemen" data-action="rename-folder" data-folder="${folder.id}">✎</button>
-        <button class="small-btn" title="Mapje verwijderen" aria-label="Mapje verwijderen" data-action="delete-folder" data-folder="${folder.id}">🗑</button>
+        <button class="small-btn" title="New habit" aria-label="New habit" data-action="add-sheet" data-folder="${folder.id}">+</button>
+        <button class="small-btn" title="Rename folder" aria-label="Rename folder" data-action="rename-folder" data-folder="${folder.id}">✎</button>
+        <button class="small-btn" title="Delete folder" aria-label="Delete folder" data-action="delete-folder" data-folder="${folder.id}">🗑</button>
       </div>
     `;
 
@@ -161,30 +151,43 @@ export function renderSidebar(route, data) {
       const empty = document.createElement("div");
       empty.className = "muted";
       empty.style.padding = "6px 10px 10px 10px";
-      empty.textContent = "Nog geen sheets. Klik op +.";
+      empty.textContent = "No habits yet. Click +.";
       sheetsWrap.appendChild(empty);
     } else {
+      const today = todayISOAmsterdam();
       for (const sheet of folder.sheets) {
+        const doneToday = !!sheet.checks[today];
+
+        // Row itself is not navigational. Only name (rename) + trash (delete).
         const row = document.createElement("div");
         row.className = "sheet";
-
-        const isActiveSheet =
-          route.view === "sheet" &&
-          route.folderId === folder.id &&
-          route.sheetId === sheet.id;
-
-        if (isActiveSheet) row.classList.add("active");
-
-        const doneToday = !!sheet.checks[todayISOAmsterdam()];
+        row.style.cursor = "default";
         row.innerHTML = `
-          <div class="sheet-name">🗒 ${escapeHtml(sheet.name)}</div>
-          <div class="sheet-meta">${doneToday ? "✅ vandaag" : ""}</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;">
+            <div
+              class="sheet-name"
+              data-rename-sheet="1"
+              data-folder="${folder.id}"
+              data-sheet="${sheet.id}"
+              data-name="${escapeHtml(sheet.name)}"
+              title="Click to rename"
+              style="cursor:pointer; flex:1; min-width:0;"
+            >• ${escapeHtml(sheet.name)}</div>
+
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div class="sheet-meta">${doneToday ? "✅" : ""}</div>
+              <button
+                type="button"
+                class="small-btn"
+                title="Delete habit"
+                aria-label="Delete habit"
+                data-action="delete-sheet"
+                data-folder="${folder.id}"
+                data-sheet="${sheet.id}"
+              >🗑</button>
+            </div>
+          </div>
         `;
-
-        row.setAttribute("data-open-sheet", "1");
-        row.setAttribute("data-folder", folder.id);
-        row.setAttribute("data-sheet", sheet.id);
-
         sheetsWrap.appendChild(row);
       }
     }
@@ -210,31 +213,31 @@ export function renderDashboard(data, range = "1D") {
   if (!view) return;
 
   const { iso, total, done, percent } = computeTodayStats(data);
-  const isoNL = isoToNLDate(iso);
+  const isoLabel = isoToDMY(iso);
 
   view.innerHTML = `
     <div class="card-grid">
       <div class="card">
-        <h2>Vandaag (${isoNL})</h2>
+        <h2>Today (${isoLabel})</h2>
         <div class="big">${percent}%</div>
-        <div class="muted">${done} van ${total} gewoontes voltooid</div>
+        <div class="muted">${done} of ${total} habits completed</div>
         <div style="height:10px"></div>
 
         <div class="pie-wrap">
           <canvas id="pie" width="180" height="180"></canvas>
           <div class="legend">
             <div class="pill"><span class="dot" style="background: var(--good)"></span> Done: <b>${done}</b></div>
-            <div class="pill"><span class="dot" style="background: rgba(255,255,255,0.18)"></span> Over: <b>${Math.max(0, total - done)}</b></div>
+            <div class="pill"><span class="dot" style="background: rgba(255,255,255,0.18)"></span> Left: <b>${Math.max(0, total - done)}</b></div>
           </div>
         </div>
 
         <div style="height:12px"></div>
-        <div class="muted">Tip: elke sheet telt als 1 gewoonte voor het dagpercentage.</div>
+        <div class="muted">Tip: each habit counts as 1 for the daily %.</div>
       </div>
 
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <h2 style="margin:0;">Overzicht</h2>
+          <h2 style="margin:0;">Overview</h2>
           ${renderRangeSelectorHTML(range)}
         </div>
         <div style="height:10px"></div>
@@ -255,7 +258,7 @@ function renderRangeSelectorHTML(active) {
   ];
 
   return `
-    <div role="tablist" aria-label="Selecteer periode"
+    <div role="tablist" aria-label="Select range"
       style="
         display:flex; gap:8px; flex-wrap:wrap;
         border:1px solid var(--border);
@@ -292,7 +295,7 @@ function renderRangeSelectorHTML(active) {
 function renderDashboardListHTML(data, range) {
   const sheets = allSheets(data);
   if (sheets.length === 0) {
-    return `<div class="muted">Nog geen sheets. Maak eerst een mapje en voeg sheets toe.</div>`;
+    return `<div class="muted">No habits yet. Create a folder and add habits.</div>`;
   }
 
   const keys = getRangeKeys(range);
@@ -313,7 +316,6 @@ function renderDashboardListHTML(data, range) {
         } else {
           let c = 0;
           for (const k of keys) if (sheet.checks[k]) c++;
-
           return `
             <div class="pill" style="justify-content:space-between;">
               <span>${escapeHtml(folder.name)} / <b>${escapeHtml(sheet.name)}</b></span>
@@ -335,19 +337,19 @@ export function drawDashboardPie(data) {
   const frac = total === 0 ? 0 : done / total;
 
   const w = canvas.width, h = canvas.height;
-  const cx = w/2, cy = h/2;
-  const r = Math.min(w,h)/2 - 14;
+  const cx = w / 2, cy = h / 2;
+  const r = Math.min(w, h) / 2 - 14;
 
-  ctx.clearRect(0,0,w,h);
+  ctx.clearRect(0, 0, w, h);
 
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(255,255,255,0.15)";
   ctx.lineWidth = 18;
   ctx.stroke();
 
-  const start = -Math.PI/2;
-  const end = start + Math.PI*2*frac;
+  const start = -Math.PI / 2;
+  const end = start + Math.PI * 2 * frac;
 
   ctx.beginPath();
   ctx.arc(cx, cy, r, start, end);
@@ -358,14 +360,12 @@ export function drawDashboardPie(data) {
 
   ctx.fillStyle = "rgba(233,238,247,0.95)";
   ctx.font = "800 22px ui-sans-serif, system-ui";
-  const pct = total === 0 ? "0%" : `${Math.round(frac*100)}%`;
+  const pct = total === 0 ? "0%" : `${Math.round(frac * 100)}%`;
   const tw = ctx.measureText(pct).width;
-  ctx.fillText(pct, cx - tw/2, cy + 8);
+  ctx.fillText(pct, cx - tw / 2, cy + 8);
 }
 
-/* ===== Folder Overview (FIXED AXES)
-   Habits on Y (left), Days on X (top), horizontal scroll across days
-===== */
+/* ===== Folder Overview (sync scroll + auto-scroll to today) ===== */
 
 export function renderFolderOverview(route, data, monthCursor) {
   const view = document.querySelector("#view");
@@ -373,328 +373,230 @@ export function renderFolderOverview(route, data, monthCursor) {
 
   const folder = findFolder(data, route.folderId);
   if (!folder) {
-    view.innerHTML = `<div class="card"><h2>Niet gevonden</h2><div class="muted">Mapje bestaat niet meer.</div></div>`;
+    view.innerHTML = `<div class="card"><h2>Not found</h2><div class="muted">Folder no longer exists.</div></div>`;
     return;
   }
 
   const habits = folder.sheets || [];
-  const d = monthCursor;
-  const y = d.getFullYear();
-  const m = d.getMonth() + 1;
-  const monthDays = daysInMonth(d);
+  const y = monthCursor.getFullYear();
+  const m = monthCursor.getMonth() + 1;
+  const monthDays = daysInMonth(monthCursor);
 
-  const monthLabel = monthTitleNL(d);
-  const todayKey = todayISOAmsterdam();
+  const todayIso = todayISOAmsterdam();
+  const t = parseISO(todayIso);
+
+  const isThisMonth = (t.y === y && t.m === m);
+  const todayIndex = isThisMonth ? t.d : 1;
+
+  const habitColW = 200;
+  const cellW = 44;
+  const headerH = 44;
 
   if (habits.length === 0) {
     view.innerHTML = `
       <div class="card">
-        <h2>${escapeHtml(folder.name)} — Overzicht</h2>
-        <div class="muted">Nog geen habits in dit mapje. Voeg er één toe via +.</div>
+        <h2>${escapeHtml(folder.name)} — Overview</h2>
+        <div class="muted">No habits in this folder yet. Click + to add one.</div>
       </div>
     `;
     return;
   }
 
-  // Header row: days across X
-  const dayHeaderCells = Array.from({ length: monthDays }, (_, i) => {
+  const dayHeaders = Array.from({ length: monthDays }, (_, i) => {
     const day = i + 1;
     const key = `${y}-${pad2(m)}-${pad2(day)}`;
-    const isToday = key === todayKey;
+    const isToday = isThisMonth && day === todayIndex;
 
     return `
       <div
+        class="${isToday ? "fv-today-col" : ""}"
         style="
-          flex: 0 0 44px;
-          width:44px;
-          min-width:44px;
-          max-width:44px;
-          padding:10px 0;
-          text-align:center;
+          width:${cellW}px; min-width:${cellW}px; max-width:${cellW}px;
+          height:${headerH}px;
+          display:flex; align-items:center; justify-content:center;
           border-right:1px solid var(--border);
           font-weight:${isToday ? "900" : "700"};
           color:${isToday ? "var(--text)" : "var(--muted)"};
-          background:${isToday ? "rgba(96,165,250,0.08)" : "transparent"};
         "
         title="${key}"
       >${day}</div>
     `;
   }).join("");
 
-  // Rows: habits down Y
-  const habitRows = habits.map(h => {
-    const nameCell = `
-      <div
-        style="
-          flex: 0 0 160px;
-          width:160px;
-          min-width:160px;
-          max-width:160px;
-          padding:10px;
-          border-right:1px solid var(--border);
-          border-top:1px solid var(--border);
-          font-weight:800;
-          white-space:nowrap;
-          overflow:hidden;
-          text-overflow:ellipsis;
-        "
-        title="${escapeHtml(h.name)}"
-      >${escapeHtml(h.name)}</div>
-    `;
+  const habitNameRows = habits.map(h => `
+    <div
+      style="
+        width:${habitColW}px; min-width:${habitColW}px; max-width:${habitColW}px;
+        height:${cellW}px;
+        display:flex; align-items:center;
+        padding:0 10px;
+        border-top:1px solid var(--border);
+        border-right:1px solid var(--border);
+        font-weight:800;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        background: rgba(255,255,255,0.02);
+      "
+      title="${escapeHtml(h.name)}"
+    >${escapeHtml(h.name)}</div>
+  `).join("");
 
+  const gridRows = habits.map(h => {
     const cells = Array.from({ length: monthDays }, (_, i) => {
       const day = i + 1;
       const key = `${y}-${pad2(m)}-${pad2(day)}`;
       const done = !!h.checks?.[key];
-      const isToday = key === todayKey;
+      const isToday = isThisMonth && day === todayIndex;
 
       return `
         <button
           type="button"
-          class="fv-cell"
+          class="fv-cell ${isToday ? "fv-today-col" : ""}"
           data-folder="${folder.id}"
           data-sheet="${h.id}"
           data-iso="${key}"
-          aria-label="${escapeHtml(h.name)} op ${key} ${done ? "uit" : "aan"}"
+          aria-label="${escapeHtml(h.name)} on ${key} ${done ? "off" : "on"}"
           style="
-            flex: 0 0 44px;
-            width:44px;
-            min-width:44px;
-            max-width:44px;
-            height: 44px;
-            border-right:1px solid var(--border);
+            width:${cellW}px; min-width:${cellW}px; max-width:${cellW}px;
+            height:${cellW}px;
+            border:none;
             border-top:1px solid var(--border);
-            background: ${done ? "rgba(74,222,128,0.14)" : (isToday ? "rgba(96,165,250,0.05)" : "rgba(255,255,255,0.02)")};
-            color: ${done ? "var(--good)" : "transparent"};
-            cursor:pointer;
+            border-right:1px solid var(--border);
+            background:${done ? "rgba(74,222,128,0.14)" : "rgba(255,255,255,0.02)"};
+            color:${done ? "var(--good)" : "transparent"};
             font-weight:900;
+            cursor:pointer;
             -webkit-tap-highlight-color: transparent;
           "
         >✓</button>
       `;
     }).join("");
 
-    return `
-      <div style="display:flex; width:100%;">
-        ${nameCell}
-        <div style="display:flex; width:max-content;">
-          ${cells}
-        </div>
-      </div>
-    `;
+    return `<div style="display:flex;">${cells}</div>`;
   }).join("");
 
   view.innerHTML = `
     <div class="card">
       <div class="cal-header">
         <div>
-          <div class="cal-title">${escapeHtml(folder.name)} — Overzicht</div>
-          <div class="muted">Maand: <b>${monthLabel}</b> · klik op een vakje om te togglen</div>
+          <div class="cal-title">${escapeHtml(folder.name)} — Overview</div>
+          <div class="muted">Tap a cell to toggle. (Auto-scroll opens near today's date.)</div>
         </div>
         <div class="cal-nav">
-          <button class="btn" id="prevMonthBtn" type="button" aria-label="Vorige maand">←</button>
-          <button class="btn" id="nextMonthBtn" type="button" aria-label="Volgende maand">→</button>
+          <button class="btn" id="prevMonthBtn" type="button" aria-label="Previous month">←</button>
+          <button class="btn" id="nextMonthBtn" type="button" aria-label="Next month">→</button>
         </div>
       </div>
 
-      <div
-        style="
+      <style>
+        .fv-shell{
           border:1px solid var(--border);
           border-radius:12px;
           overflow:hidden;
           background: rgba(255,255,255,0.02);
-        "
-      >
-        <!-- Header -->
-        <div style="display:flex; width:100%;">
-          <div
-            style="
-              flex: 0 0 160px;
-              width:160px;
-              min-width:160px;
-              max-width:160px;
-              padding:10px;
-              border-right:1px solid var(--border);
-              font-weight:900;
-              color: var(--muted);
-            "
-          >Habit</div>
+        }
+        .fv-scroll-y{
+          max-height: 66vh;
+          overflow:auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .fv-header{
+          display:flex;
+          position: sticky;
+          top: 0;
+          z-index: 5;
+          background: rgba(12,18,30,0.92);
+          backdrop-filter: blur(8px);
+          border-bottom:1px solid var(--border);
+        }
+        .fv-header-left{
+          width:${habitColW}px; min-width:${habitColW}px; max-width:${habitColW}px;
+          height:${headerH}px;
+          display:flex; align-items:center;
+          padding:0 10px;
+          font-weight:900;
+          color: var(--muted);
+          border-right:1px solid var(--border);
+        }
+        .fv-header-right{
+          overflow-x:auto;
+          overflow-y:hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+        .fv-body{
+          display:flex;
+        }
+        .fv-left{
+          width:${habitColW}px; min-width:${habitColW}px; max-width:${habitColW}px;
+        }
+        .fv-right{
+          overflow-x:auto;
+          overflow-y:hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+        .fv-today-col{
+          background: rgba(96,165,250,0.10) !important;
+        }
+      </style>
 
-          <div style="overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling: touch;">
-            <div style="display:flex; width:max-content;">
-              ${dayHeaderCells}
+      <div class="fv-shell" id="fvShell"
+        data-cellw="${cellW}"
+        data-todayindex="${todayIndex}"
+        data-isthismonth="${isThisMonth ? "1" : "0"}"
+      >
+        <div class="fv-scroll-y">
+          <div class="fv-header">
+            <div class="fv-header-left">Habit</div>
+            <div class="fv-header-right" id="fvXHead">
+              <div style="display:flex; width:max-content;">${dayHeaders}</div>
+            </div>
+          </div>
+
+          <div class="fv-body">
+            <div class="fv-left">${habitNameRows}</div>
+            <div class="fv-right" id="fvXBody">
+              <div style="width:max-content;">${gridRows}</div>
             </div>
           </div>
         </div>
-
-        <!-- Body -->
-        <div style="max-height: 62vh; overflow:auto; -webkit-overflow-scrolling: touch;">
-          ${habits.map(h => {
-            const nameCell = `
-              <div
-                style="
-                  flex: 0 0 160px;
-                  width:160px;
-                  min-width:160px;
-                  max-width:160px;
-                  padding:10px;
-                  border-right:1px solid var(--border);
-                  border-top:1px solid var(--border);
-                  font-weight:800;
-                  white-space:nowrap;
-                  overflow:hidden;
-                  text-overflow:ellipsis;
-                "
-                title="${escapeHtml(h.name)}"
-              >${escapeHtml(h.name)}</div>
-            `;
-
-            const cells = Array.from({ length: monthDays }, (_, i) => {
-              const day = i + 1;
-              const key = `${y}-${pad2(m)}-${pad2(day)}`;
-              const done = !!h.checks?.[key];
-              const isToday = key === todayKey;
-
-              return `
-                <button
-                  type="button"
-                  class="fv-cell"
-                  data-folder="${folder.id}"
-                  data-sheet="${h.id}"
-                  data-iso="${key}"
-                  aria-label="${escapeHtml(h.name)} op ${key} ${done ? "uit" : "aan"}"
-                  style="
-                    flex: 0 0 44px;
-                    width:44px;
-                    min-width:44px;
-                    max-width:44px;
-                    height: 44px;
-                    border-right:1px solid var(--border);
-                    border-top:1px solid var(--border);
-                    background: ${done ? "rgba(74,222,128,0.14)" : (isToday ? "rgba(96,165,250,0.05)" : "rgba(255,255,255,0.02)")};
-                    color: ${done ? "var(--good)" : "transparent"};
-                    cursor:pointer;
-                    font-weight:900;
-                    -webkit-tap-highlight-color: transparent;
-                  "
-                >✓</button>
-              `;
-            }).join("");
-
-            return `
-              <div style="display:flex; width:100%;">
-                ${nameCell}
-                <div style="overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling: touch;">
-                  <div style="display:flex; width:max-content;">
-                    ${cells}
-                  </div>
-                </div>
-              </div>
-            `;
-          }).join("")}
-        </div>
-      </div>
-
-      <div style="height:10px"></div>
-      <div class="muted" style="font-size:12px;">
-        Later: kleurselect popup per vakje (rood/geel/roze/paars/blauw). Nu is het simpel togglen.
       </div>
     </div>
   `;
 }
 
-/* ===== Sheet View ===== */
+/**
+ * MUST be called after renderFolderOverview().
+ * Fixes:
+ * - header + body horizontal scroll stay in sync (because inline scripts won't run)
+ * - auto-scrolls horizontally to today's column when opening the view
+ */
+export function wireFolderOverview() {
+  const shell = document.getElementById("fvShell");
+  const head = document.getElementById("fvXHead");
+  const body = document.getElementById("fvXBody");
+  if (!shell || !head || !body) return;
 
-export function renderSheet(route, data, monthCursor) {
-  const view = document.querySelector("#view");
-  if (!view) return;
+  const cellW = Number(shell.dataset.cellw || "44");
+  const todayIndex = Number(shell.dataset.todayindex || "1");
+  const isThisMonth = shell.dataset.isthismonth === "1";
 
-  const folder = findFolder(data, route.folderId);
-  const sheet = findSheet(data, route.folderId, route.sheetId);
+  // 1) Sync scroll
+  let lock = false;
+  const sync = (from, to) => {
+    if (lock) return;
+    lock = true;
+    to.scrollLeft = from.scrollLeft;
+    requestAnimationFrame(() => { lock = false; });
+  };
+  head.addEventListener("scroll", () => sync(head, body), { passive: true });
+  body.addEventListener("scroll", () => sync(body, head), { passive: true });
 
-  if (!folder || !sheet) {
-    view.innerHTML = `<div class="card"><h2>Niet gevonden</h2><div class="muted">Sheet bestaat niet meer.</div></div>`;
-    return;
+  // 2) Auto-scroll to today (center-ish)
+  // Only if current month; otherwise leave at start.
+  if (isThisMonth) {
+    // Scroll so that today is not pinned at far left; aim a bit earlier.
+    const targetCol = Math.max(1, todayIndex - 3); // show a few days before today
+    const targetLeft = (targetCol - 1) * cellW;
+    body.scrollLeft = targetLeft;
+    head.scrollLeft = targetLeft;
   }
-
-  const d = monthCursor;
-  const monthStart = startOfMonth(d);
-  const offset = weekdayIndexMonFirst(monthStart);
-
-  const weekdays = ["Ma","Di","Wo","Do","Vr","Za","Zo"].map(w => `<div class="weekday">${w}</div>`).join("");
-
-  const firstCellDate = new Date(monthStart);
-  firstCellDate.setDate(1 - offset);
-
-  const todayKey = todayISOAmsterdam();
-
-  const cells = [];
-  for (let i=0; i<42; i++) {
-    const cellDate = new Date(firstCellDate);
-    cellDate.setDate(firstCellDate.getDate() + i);
-
-    const key = `${cellDate.getFullYear()}-${pad2(cellDate.getMonth()+1)}-${pad2(cellDate.getDate())}`;
-
-    const inMonth = cellDate.getMonth() === d.getMonth();
-    const done = !!sheet.checks[key];
-    const isToday = key === todayKey;
-
-    cells.push(`
-      <div class="day ${inMonth ? "" : "off"} ${isToday ? "today" : ""}" data-iso="${key}">
-        <div class="top">
-          <div>${cellDate.getDate()}</div>
-          <div class="badge ${done ? "done" : ""}">${done ? "✓" : ""}</div>
-        </div>
-        <div class="muted" style="font-size:12px;">${done ? "gedaan" : "niet gedaan"}</div>
-      </div>
-    `);
-  }
-
-  const monthTitle = monthTitleNL(d);
-  const monthStats = computeMonthStats(sheet, d);
-  const todayDone = !!sheet.checks[todayKey];
-
-  view.innerHTML = `
-    <div class="card">
-      <div class="cal-header">
-        <div>
-          <div class="cal-title">${escapeHtml(sheet.name)}</div>
-          <div class="muted">
-            ${escapeHtml(folder.name)} · Vandaag: ${todayDone ? "✅ gedaan" : "⬜ niet gedaan"} ·
-            Deze maand: <b>${monthStats.done}/${monthStats.total}</b> dagen gedaan
-          </div>
-        </div>
-        <div class="cal-nav">
-          <button class="btn" id="prevMonthBtn" type="button" aria-label="Vorige maand">←</button>
-          <button class="btn" id="nextMonthBtn" type="button" aria-label="Volgende maand">→</button>
-        </div>
-      </div>
-
-      <div class="muted" style="margin-bottom:10px;">${monthTitle} · klik op een dag om te togglen</div>
-
-      <div class="cal-grid">
-        ${weekdays}
-        ${cells.join("")}
-      </div>
-
-      <div style="height:10px"></div>
-      <div class="muted" style="font-size:12px;">
-        Tip: rechtsklik (of long-press op mobiel) op sheet in sidebar voor hernoemen/verwijderen.
-      </div>
-    </div>
-  `;
-}
-
-function computeMonthStats(sheet, cursorDate) {
-  const start = startOfMonth(cursorDate);
-  const end = endOfMonth(cursorDate);
-  const total = end.getDate();
-  let done = 0;
-
-  for (let day=1; day<=total; day++) {
-    const d = new Date(start.getFullYear(), start.getMonth(), day);
-    const key = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-    if (sheet.checks[key]) done++;
-  }
-  return { done, total };
 }
